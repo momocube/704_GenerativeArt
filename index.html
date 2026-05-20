@@ -1580,7 +1580,7 @@ void main() {
     // opener side (same origin), so this should not prompt.
     if ('getScreenDetails' in window && Number.isFinite(wL)) {
       window.getScreenDetails().then(det => {
-        _fsTarget = det.screens.find(s => s.left === wL && s.top === wT) || null;
+        _fsTarget = det.screens.find(s => s.availLeft === wL && s.availTop === wT) || null;
       }).catch(() => {});
     }
     // Fire at every plausible "page is ready" moment. Whichever fires
@@ -3936,26 +3936,28 @@ void main() {
       url.searchParams.set('screen_left', String(rect.left));
       url.searchParams.set('screen_top',  String(rect.top));
       // Chrome's "fullscreen popup" feature (Window Management API):
-      // window.open() with `popup=true,fullscreen=true` opens the popup
-      // directly in OS-level fullscreen on the target screen — no title
-      // bar, no URL bar, no taskbar. Requirements:
-      //   • Chrome 122+ (was origin-trial in 119–121; shipped in 122)
-      //   • The `window-management` permission must be granted (we just
-      //     triggered the prompt by calling getScreenDetails() above)
-      //   • This window.open() must be in a user-gesture stack frame —
-      //     it is (this is inside a click handler on the picker item)
-      // Chrome's docs use `popup=true,fullscreen=true`; some sources use
-      // `=yes`. Chrome's parser is case-sensitive about the *value*
-      // ("true"/"yes" both legal per HTML spec but `=true` is what the
-      // official examples use — match those exactly to avoid edge-case
-      // parsing differences).
-      features = `popup=true,fullscreen=true` +
-                 `,left=${rect.left},top=${rect.top}` +
-                 `,width=${rect.width},height=${rect.height}` +
-                 `,menubar=no,toolbar=no,location=no,status=no`;
+      // shipped in Chrome 122. Opens the popup directly in OS-level
+      // fullscreen on the target screen — no title bar, no URL bar,
+      // no taskbar. Requirements:
+      //   • Chrome 122+
+      //   • `window-management` permission granted (covered above)
+      //   • Call must be from a user gesture (picker item click ✓)
+      //   • Target must be `_blank` (handled below)
+      //   • Bounds must match a screen's *work area* (availLeft/Top/…)
+      //
+      // Use BARE feature names (`popup,fullscreen`), not `=true`. Chrome
+      // accepts both per HTML spec but its official samples (and the
+      // multi-screen-window-placement explainer) only ever use the
+      // bare form, and at least one Chrome build silently fails to
+      // honor the `=true` variant.
+      features =
+        `left=${rect.left},top=${rect.top}` +
+        `,width=${rect.width},height=${rect.height}` +
+        `,popup,fullscreen` +
+        `,menubar=no,toolbar=no,location=no,status=no`;
     } else {
       const w = 768, h = Math.round(768 * 3840 / 2688);
-      features = `popup=true,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`;
+      features = `width=${w},height=${h},popup,menubar=no,toolbar=no,location=no,status=no`;
     }
     // Close any prior projector. Do NOT reuse the window name — Chrome's
     // fullscreen popup feature only honors `fullscreen=true` when opening
@@ -3993,7 +3995,7 @@ void main() {
       let _fsTargetPromise = Promise.resolve(null);
       if ('getScreenDetails' in window && Number.isFinite(_wL)) {
         _fsTargetPromise = window.getScreenDetails()
-          .then(det => det.screens.find(s => s.left === _wL && s.top === _wT) || null)
+          .then(det => det.screens.find(s => s.availLeft === _wL && s.availTop === _wT) || null)
           .catch(() => null);
       }
       // Wait until the popup's documentElement exists, then call
@@ -4073,9 +4075,19 @@ void main() {
           items.push({
             label: (s.label || ('Display ' + (i + 1))) + (s.isPrimary ? ' · primary' : ''),
             meta: s.width + '×' + s.height,
-            // Full screen bounds (not avail*) so the projector covers the
-            // taskbar area too — fullscreen will then hide it cleanly.
-            rect: { left: s.left, top: s.top, width: s.width, height: s.height },
+            // Use the screen's *work area* (availLeft / availTop /
+            // availWidth / availHeight) — this is what every Chrome
+            // sample for fullscreen popups uses. Chrome appears to
+            // match the popup bounds against work-area for its
+            // fullscreen-popup eligibility check; passing full screen
+            // bounds (left/top/width/height) makes it fall through to
+            // a normal popup.
+            rect: {
+              left:   s.availLeft,
+              top:    s.availTop,
+              width:  s.availWidth,
+              height: s.availHeight,
+            },
           });
         });
       } catch (err) {
