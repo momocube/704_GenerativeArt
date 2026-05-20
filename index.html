@@ -3936,11 +3936,13 @@ void main() {
     // delivery channel (BroadcastChannel can be throttled for fullscreen
     // popups on a non-focused monitor; direct postMessage isn't).
     window.__704_projectorWin = _projectorWin;
-    if (_projectorWin && rect) {
-      // Some browsers ignore left/top on open(); nudge after creation.
-      try { _projectorWin.moveTo(rect.left, rect.top); } catch (e) {}
-      try { _projectorWin.resizeTo(rect.width, rect.height); } catch (e) {}
-    }
+    // IMPORTANT: do NOT call moveTo()/resizeTo() on the popup when we
+    // requested `fullscreen=yes`. Those calls force the window into
+    // "windowed" geometry and immediately knock OS-level fullscreen back
+    // out (toolbar reappears). The left/top/width/height we already
+    // passed in the features string is enough — if a browser ignores
+    // fullscreen=yes the popup still opens at the right screen bounds
+    // and the projector-side requestFullscreen() takes over from there.
   }
   // Tiny popover for screen choices
   const _screenPop = document.createElement('div');
