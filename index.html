@@ -3957,9 +3957,15 @@ void main() {
       const w = 768, h = Math.round(768 * 3840 / 2688);
       features = `popup=true,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`;
     }
+    // Close any prior projector. Do NOT reuse the window name — Chrome's
+    // fullscreen popup feature only honors `fullscreen=true` when opening
+    // a *fresh* browsing context, so a named target like '704_projector'
+    // makes Chrome reuse the existing window (or treat the call as
+    // navigation) and silently drop the fullscreen request. `_blank` is
+    // what every Chrome official sample uses.
     try { if (_projectorWin && !_projectorWin.closed) _projectorWin.close(); }
     catch (e) { /* ignore */ }
-    _projectorWin = window.open(url.toString(), '704_projector', features);
+    _projectorWin = window.open(url.toString(), '_blank', features);
     // Expose the handle so syncSend() can use postMessage as a redundant
     // delivery channel (BroadcastChannel can be throttled for fullscreen
     // popups on a non-focused monitor; direct postMessage isn't).
