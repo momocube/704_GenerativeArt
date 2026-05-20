@@ -3936,13 +3936,57 @@ void main() {
     // delivery channel (BroadcastChannel can be throttled for fullscreen
     // popups on a non-focused monitor; direct postMessage isn't).
     window.__704_projectorWin = _projectorWin;
-    // IMPORTANT: do NOT call moveTo()/resizeTo() on the popup when we
-    // requested `fullscreen=yes`. Those calls force the window into
-    // "windowed" geometry and immediately knock OS-level fullscreen back
-    // out (toolbar reappears). The left/top/width/height we already
-    // passed in the features string is enough — if a browser ignores
-    // fullscreen=yes the popup still opens at the right screen bounds
-    // and the projector-side requestFullscreen() takes over from there.
+    // IMPORTANT: do NOT call moveTo()/resizeTo() on the popup. Those
+    // calls would force the window into "windowed" geometry and knock
+    // OS-level fullscreen back out (toolbar reappears).
+    //
+    // For browsers that ignore `fullscreen=yes` in the features string
+    // (Firefox / Safari / some Edge builds / Chrome without the
+    // window-management permission cached), we additionally drive the
+    // popup into fullscreen from THIS click handler — calling
+    // `popup.document.documentElement.requestFullscreen()` from the
+    // opener uses the opener's transient activation (this click), which
+    // the popup itself doesn't reliably inherit. We retry briefly while
+    // the popup's DOM finishes loading.
+    if (_projectorWin) {
+      const _wL = rect ? rect.left : NaN;
+      const _wT = rect ? rect.top  : NaN;
+      // Pre-resolve the target screen NOW while this click is still the
+      // active gesture — calling requestFullscreen later with a screen
+      // option costs no extra activation, but resolving it via the
+      // Promise from getScreenDetails() does spend time on the activation
+      // clock, so we get the work out of the way once up-front.
+      let _fsTargetPromise = Promise.resolve(null);
+      if ('getScreenDetails' in window && Number.isFinite(_wL)) {
+        _fsTargetPromise = window.getScreenDetails()
+          .then(det => det.screens.find(s => s.left === _wL && s.top === _wT) || null)
+          .catch(() => null);
+      }
+      // Wait until the popup's documentElement exists, then call
+      // requestFullscreen ONCE — driven from the opener so it uses this
+      // click's transient activation, which Chromium passes through to
+      // a same-origin popup via getDocument().requestFullscreen().
+      let _fsAttempts = 0;
+      const _fsTimer = setInterval(() => {
+        _fsAttempts++;
+        if (!_projectorWin || _projectorWin.closed) { clearInterval(_fsTimer); return; }
+        let doc;
+        try { doc = _projectorWin.document; } catch (e) { return; /* not ready */ }
+        if (!doc || !doc.documentElement) return;
+        if (doc.fullscreenElement) { clearInterval(_fsTimer); return; }
+        // Fire once and stop the timer. Even if the promise rejects, we
+        // don't want to retry — requestFullscreen consumes activation
+        // and second attempts would fail anyway.
+        clearInterval(_fsTimer);
+        _fsTargetPromise.then(target => {
+          const opts = { navigationUI: 'hide' };
+          if (target) opts.screen = target;
+          try { doc.documentElement.requestFullscreen(opts).catch(() => {}); }
+          catch (e) { /* ignore */ }
+        });
+        if (_fsAttempts >= 40) clearInterval(_fsTimer);
+      }, 25);
+    }
   }
   // Tiny popover for screen choices
   const _screenPop = document.createElement('div');
