@@ -1531,43 +1531,113 @@ void main() {
     try { bc.postMessage({ type: type, payload: payload }); } catch (e) { /* ignore */ }
   }
 
-  // If the projector was opened with ?fullscreen=1 we go true-fullscreen on
-  // the requested screen as the very first thing — this consumes the user
-  // gesture that window.open() forwarded from the controller's click. Done
-  // ASAP (before WebGL init / RAF) because some browsers expire the
-  // inherited activation quickly. Window Management API gives us the
-  // `screen` option so we land on the target monitor, not whichever screen
-  // the OS happened to put the popup on.
+  // If the projector was opened with ?fullscreen=1 we go true-fullscreen
+  // ASAP. Three layers, in priority order:
+  //   1. Chrome 119+ `window.open(..., 'fullscreen=yes,...')` should have
+  //      already put the popup into OS-level fullscreen on the target
+  //      screen before this script even runs. Nothing to do here.
+  //   2. Otherwise, call requestFullscreen() *synchronously* (no await
+  //      first — any pending promise would burn the inherited gesture).
+  //      We also schedule the Window Management API enhancement
+  //      (requestFullscreen({ screen })) asynchronously in case (2)
+  //      already triggered: switching the fullscreen target screen does
+  //      not require fresh activation.
+  //   3. If both fail, show a full-viewport click-to-start overlay so the
+  //      user can enter fullscreen with one tap. This is the same pattern
+  //      OBS / WebRTC dashboards use.
   if (IS_PROJECTOR && _projParams.get('fullscreen') === '1') {
-    (async () => {
-      let target = null;
-      const wL = parseInt(_projParams.get('screen_left') || '', 10);
-      const wT = parseInt(_projParams.get('screen_top')  || '', 10);
-      if ('getScreenDetails' in window) {
-        try {
-          const det = await window.getScreenDetails();
-          if (Number.isFinite(wL) && Number.isFinite(wT)) {
-            target = det.screens.find(s => s.left === wL && s.top === wT) || null;
-          }
-          if (!target) target = det.currentScreen || null;
-        } catch (e) { /* permission denied — fall back to plain fullscreen */ }
-      }
+    const wL = parseInt(_projParams.get('screen_left') || '', 10);
+    const wT = parseInt(_projParams.get('screen_top')  || '', 10);
+
+    const tryFullscreen = (screen) => {
       const opts = { navigationUI: 'hide' };
-      if (target) opts.screen = target;
-      try { await document.documentElement.requestFullscreen(opts); }
-      catch (e) {
-        // Activation lost or denied. As a last resort, watch for the user's
-        // first click on the projector and retry — gives them an escape
-        // hatch instead of silently failing.
-        const retry = () => {
-          document.documentElement.requestFullscreen(opts).catch(() => {});
-          window.removeEventListener('click', retry);
-          window.removeEventListener('keydown', retry);
-        };
-        window.addEventListener('click',   retry, { once: true });
-        window.addEventListener('keydown', retry, { once: true });
+      if (screen) opts.screen = screen;
+      return document.documentElement.requestFullscreen(opts);
+    };
+
+    const enhanceWithScreen = () => {
+      if (!('getScreenDetails' in window)) return;
+      // Permission was already granted in the controller (same origin),
+      // so this should resolve without prompting.
+      window.getScreenDetails().then(det => {
+        let target = null;
+        if (Number.isFinite(wL) && Number.isFinite(wT)) {
+          target = det.screens.find(s => s.left === wL && s.top === wT) || null;
+        }
+        if (target && document.fullscreenElement) {
+          // already fullscreen — re-request to retarget the right screen
+          tryFullscreen(target).catch(() => {});
+        } else if (target) {
+          tryFullscreen(target).catch(() => {});
+        }
+      }).catch(() => {});
+    };
+
+    // Layer 2: try sync, before any await.
+    let layer2Ok = false;
+    try {
+      const p = tryFullscreen();
+      if (p && p.then) {
+        p.then(() => { layer2Ok = true; enhanceWithScreen(); })
+         .catch(() => { showStartOverlay(); });
+      } else {
+        layer2Ok = true;
+        enhanceWithScreen();
       }
-    })();
+    } catch (e) {
+      showStartOverlay();
+    }
+
+    function showStartOverlay() {
+      // Avoid double-creating the overlay.
+      if (document.getElementById('proj-start-overlay')) return;
+      const ov = document.createElement('div');
+      ov.id = 'proj-start-overlay';
+      ov.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:9999',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'background:rgba(5,6,10,0.94)', 'color:#f4f6fa',
+        'font-family:Inter,system-ui,sans-serif',
+        'cursor:pointer', 'user-select:none',
+      ].join(';');
+      ov.innerHTML =
+        '<div style="text-align:center;padding:40px;">' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(244,246,250,0.45);margin-bottom:18px;">' +
+            '704 · PROJECTOR' +
+          '</div>' +
+          '<div style="font-size:22px;font-weight:500;letter-spacing:-0.01em;margin-bottom:10px;">' +
+            'Click anywhere to enter fullscreen' +
+          '</div>' +
+          '<div style="font-size:13px;color:rgba(244,246,250,0.55);line-height:1.5;">' +
+            'Your browser needs one click to enter fullscreen on the target display.<br>' +
+            'After that, switching shaders on the control window stays live.' +
+          '</div>' +
+        '</div>';
+      const activate = () => {
+        try {
+          const p = tryFullscreen();
+          if (p && p.then) p.then(() => { ov.remove(); enhanceWithScreen(); }).catch(() => {});
+          else { ov.remove(); enhanceWithScreen(); }
+        } catch (e) { /* leave the overlay; user can try again */ }
+      };
+      ov.addEventListener('click', activate);
+      window.addEventListener('keydown', activate, { once: true });
+      // The body may not exist yet if the script runs before parsing
+      // finishes — wait if needed.
+      const mount = () => document.body && document.body.appendChild(ov);
+      if (document.body) mount();
+      else document.addEventListener('DOMContentLoaded', mount, { once: true });
+    }
+
+    // Layer 3 safety net: if 800ms pass and we're still not fullscreen,
+    // show the overlay. Handles browsers that resolve the promise but
+    // don't actually engage fullscreen (e.g., gesture lost silently).
+    setTimeout(() => {
+      if (!document.fullscreenElement) showStartOverlay();
+    }, 800);
+
+    // If user manually exits fullscreen (Esc), keep going — don't
+    // re-prompt; they likely want to close the projector entirely.
   }
 
   // ---------- WebGL setup ----------
@@ -3821,10 +3891,14 @@ void main() {
       url.searchParams.set('fullscreen', '1');
       url.searchParams.set('screen_left', String(rect.left));
       url.searchParams.set('screen_top',  String(rect.top));
-      // Open at the FULL screen bounds (not the work area) so even before
-      // fullscreen kicks in there's no taskbar visible, and the transition
-      // doesn't visibly resize. requestFullscreen still hides chrome.
-      features = `popup=yes,left=${rect.left},top=${rect.top},width=${rect.width},height=${rect.height}` +
+      // `fullscreen=yes` is Chrome 119+ fullscreen-popup, which (with
+      // window-management permission, which we just acquired by calling
+      // getScreenDetails()) opens the popup directly in OS-level
+      // fullscreen on the target screen — no title bar, no URL bar, no
+      // taskbar. Other browsers will ignore the feature; the projector
+      // window's onload code also tries requestFullscreen() as a backup,
+      // and shows a click-to-fullscreen overlay if even that fails.
+      features = `popup=yes,fullscreen=yes,left=${rect.left},top=${rect.top},width=${rect.width},height=${rect.height}` +
                  `,menubar=no,toolbar=no,location=no,status=no`;
     } else {
       const w = 768, h = Math.round(768 * 3840 / 2688);
