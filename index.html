@@ -1526,118 +1526,57 @@ void main() {
   let _syncMouseLast = 0;
   let _suspendSync = false; // set while applying an incoming sync msg, so
                             // projector-side state changes don't bounce back.
+  // Controller keeps a handle to the popup so we can use window.postMessage
+  // as a redundant channel — Chromium occasionally throttles BroadcastChannel
+  // delivery to fullscreen popups on a non-focused screen, but direct
+  // window-to-window postMessage stays prompt.
+  // Defined globally so _openProjectorAt() and syncSend() share it.
+  window.__704_projectorWin = window.__704_projectorWin || null;
   function syncSend(type, payload) {
-    if (!bc || IS_PROJECTOR || _suspendSync) return;
-    try { bc.postMessage({ type: type, payload: payload }); } catch (e) { /* ignore */ }
+    if (IS_PROJECTOR || _suspendSync) return;
+    const msg = { __704sync: true, type: type, payload: payload };
+    if (bc) {
+      try { bc.postMessage(msg); } catch (e) { /* ignore */ }
+    }
+    // Redundant window.postMessage to the projector popup.
+    const w = window.__704_projectorWin;
+    if (w && !w.closed) {
+      try { w.postMessage(msg, location.origin); } catch (e) { /* ignore */ }
+    }
   }
 
   // If the projector was opened with ?fullscreen=1 we go true-fullscreen
-  // ASAP. Three layers, in priority order:
-  //   1. Chrome 119+ `window.open(..., 'fullscreen=yes,...')` should have
-  //      already put the popup into OS-level fullscreen on the target
-  //      screen before this script even runs. Nothing to do here.
-  //   2. Otherwise, call requestFullscreen() *synchronously* (no await
-  //      first — any pending promise would burn the inherited gesture).
-  //      We also schedule the Window Management API enhancement
-  //      (requestFullscreen({ screen })) asynchronously in case (2)
-  //      already triggered: switching the fullscreen target screen does
-  //      not require fresh activation.
-  //   3. If both fail, show a full-viewport click-to-start overlay so the
-  //      user can enter fullscreen with one tap. This is the same pattern
-  //      OBS / WebRTC dashboards use.
+  // ASAP. The popup was launched with `window.open(..., 'fullscreen=yes')`
+  // from a user gesture in the controller — on Chrome 119+ with
+  // window-management permission that opens the popup *already* in OS
+  // fullscreen, so nothing more is needed. For older Chromium / Safari /
+  // Firefox we also call requestFullscreen() synchronously (must not
+  // await anything first — that would burn the gesture that window.open
+  // forwarded) and then asynchronously upgrade to the right screen via
+  // the Window Management API.
   if (IS_PROJECTOR && _projParams.get('fullscreen') === '1') {
     const wL = parseInt(_projParams.get('screen_left') || '', 10);
     const wT = parseInt(_projParams.get('screen_top')  || '', 10);
-
     const tryFullscreen = (screen) => {
       const opts = { navigationUI: 'hide' };
       if (screen) opts.screen = screen;
       return document.documentElement.requestFullscreen(opts);
     };
-
     const enhanceWithScreen = () => {
       if (!('getScreenDetails' in window)) return;
-      // Permission was already granted in the controller (same origin),
-      // so this should resolve without prompting.
       window.getScreenDetails().then(det => {
         let target = null;
         if (Number.isFinite(wL) && Number.isFinite(wT)) {
           target = det.screens.find(s => s.left === wL && s.top === wT) || null;
         }
-        if (target && document.fullscreenElement) {
-          // already fullscreen — re-request to retarget the right screen
-          tryFullscreen(target).catch(() => {});
-        } else if (target) {
-          tryFullscreen(target).catch(() => {});
-        }
+        if (target) tryFullscreen(target).catch(() => {});
       }).catch(() => {});
     };
-
-    // Layer 2: try sync, before any await.
-    let layer2Ok = false;
     try {
       const p = tryFullscreen();
-      if (p && p.then) {
-        p.then(() => { layer2Ok = true; enhanceWithScreen(); })
-         .catch(() => { showStartOverlay(); });
-      } else {
-        layer2Ok = true;
-        enhanceWithScreen();
-      }
-    } catch (e) {
-      showStartOverlay();
-    }
-
-    function showStartOverlay() {
-      // Avoid double-creating the overlay.
-      if (document.getElementById('proj-start-overlay')) return;
-      const ov = document.createElement('div');
-      ov.id = 'proj-start-overlay';
-      ov.style.cssText = [
-        'position:fixed', 'inset:0', 'z-index:9999',
-        'display:flex', 'align-items:center', 'justify-content:center',
-        'background:rgba(5,6,10,0.94)', 'color:#f4f6fa',
-        'font-family:Inter,system-ui,sans-serif',
-        'cursor:pointer', 'user-select:none',
-      ].join(';');
-      ov.innerHTML =
-        '<div style="text-align:center;padding:40px;">' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(244,246,250,0.45);margin-bottom:18px;">' +
-            '704 · PROJECTOR' +
-          '</div>' +
-          '<div style="font-size:22px;font-weight:500;letter-spacing:-0.01em;margin-bottom:10px;">' +
-            'Click anywhere to enter fullscreen' +
-          '</div>' +
-          '<div style="font-size:13px;color:rgba(244,246,250,0.55);line-height:1.5;">' +
-            'Your browser needs one click to enter fullscreen on the target display.<br>' +
-            'After that, switching shaders on the control window stays live.' +
-          '</div>' +
-        '</div>';
-      const activate = () => {
-        try {
-          const p = tryFullscreen();
-          if (p && p.then) p.then(() => { ov.remove(); enhanceWithScreen(); }).catch(() => {});
-          else { ov.remove(); enhanceWithScreen(); }
-        } catch (e) { /* leave the overlay; user can try again */ }
-      };
-      ov.addEventListener('click', activate);
-      window.addEventListener('keydown', activate, { once: true });
-      // The body may not exist yet if the script runs before parsing
-      // finishes — wait if needed.
-      const mount = () => document.body && document.body.appendChild(ov);
-      if (document.body) mount();
-      else document.addEventListener('DOMContentLoaded', mount, { once: true });
-    }
-
-    // Layer 3 safety net: if 800ms pass and we're still not fullscreen,
-    // show the overlay. Handles browsers that resolve the promise but
-    // don't actually engage fullscreen (e.g., gesture lost silently).
-    setTimeout(() => {
-      if (!document.fullscreenElement) showStartOverlay();
-    }, 800);
-
-    // If user manually exits fullscreen (Esc), keep going — don't
-    // re-prompt; they likely want to close the projector entirely.
+      if (p && p.then) p.then(enhanceWithScreen).catch(() => {});
+      else enhanceWithScreen();
+    } catch (e) { /* ignore — fullscreen=yes likely already engaged */ }
   }
 
   // ---------- WebGL setup ----------
@@ -2061,6 +2000,34 @@ function draw() {
       Object.assign(state.entrance, e);
     }
   } catch (e) { /* ignore */ }
+  // Restore the user's last GLSL + p5 code and the editor mode they
+  // were in. Without this, every page reload silently throws away
+  // whatever Custom shader / sketch they had been working on, which is
+  // surprising — Apply should feel as permanent as Favorites.
+  try {
+    const raw = localStorage.getItem('shaderWallpapers.venue.code.v1');
+    if (raw) {
+      const c = JSON.parse(raw);
+      if (typeof c.customBody === 'string') state.customBody = c.customBody;
+      if (typeof c.p5Body     === 'string') state.p5Body     = c.p5Body;
+      if (c.customMode === 'glsl' || c.customMode === 'p5') {
+        state.customMode = c.customMode;
+      }
+    }
+  } catch (e) { /* ignore */ }
+  // Tiny saver used by applyGLSL / applyP5 / setMode below. Projector
+  // windows are pure mirrors — they must not overwrite the controller's
+  // last-known-good code with whatever they happened to receive.
+  function saveCodeState() {
+    if (IS_PROJECTOR) return;
+    try {
+      localStorage.setItem('shaderWallpapers.venue.code.v1', JSON.stringify({
+        customBody: state.customBody,
+        p5Body:     state.p5Body,
+        customMode: state.customMode,
+      }));
+    } catch (e) { /* over quota / private mode — ignore */ }
+  }
   // Load the persisted image (if any) — keeps the user's pick across reloads.
   if (state.entrance.imageDataUrl) {
     const img = new Image();
@@ -2924,6 +2891,7 @@ void main() {
     codeTA.value = mode === 'glsl' ? state.customBody : state.p5Body;
     setStatus('Mode: ' + (mode === 'glsl' ? 'GLSL fragment' : 'p5.js sketch') +
               ' · press Apply to run.', null);
+    saveCodeState();
   }
   codeModeBtns.forEach(b => b.addEventListener('click', () => {
     setMode(b.dataset.mode);
@@ -2995,6 +2963,7 @@ void main() {
     setP5Active(false);
     setActive(CUSTOM_IDX);
     setStatus('GLSL compiled OK · ' + body.split('\n').length + ' lines.', 'ok');
+    saveCodeState();
     syncSend('glsl', { body: body });
     return true;
   }
@@ -3037,6 +3006,7 @@ void main() {
       ' · ' + lines + ' lines.',
       'ok'
     );
+    saveCodeState();
     syncSend('p5', { body: body });
     return true;
   }
@@ -3728,6 +3698,13 @@ void main() {
   }
   function _applyEntranceFromSync(e) {
     if (!e) return;
+    // Detect whether anything that affects the *compiled* program changed.
+    // The shader body is what's baked into the GL program; the rest are
+    // uniforms refreshed each frame, so we only need a recompile when the
+    // shader body or which-shader changed.
+    const _entShaderChanged =
+      e.shaderId   !== state.entrance.shaderId  ||
+      (e.shaderBody || '') !== (state.entrance.shaderBody || '');
     state.entrance.mode        = e.mode;
     state.entrance.color       = e.color;
     state.entrance.shaderId    = e.shaderId;
@@ -3749,12 +3726,27 @@ void main() {
       state.entrance.imageDataUrl = null;
       state.entrance._cachedImg = null;
     }
-    recompileMainWithEntrance();
+    if (_entShaderChanged) recompileMainWithEntrance();
     if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
   }
-  if (bc) {
-    bc.onmessage = (ev) => {
-      const msg = ev.data || {};
+  // Single shared dispatcher for both BroadcastChannel and window.message,
+  // so adding the second transport doesn't double-apply messages.
+  let _lastMsgKey = '';
+  function _dispatchSyncMsg(msg) {
+    if (!msg || !msg.__704sync) return;
+    // De-dupe: bc + postMessage may both deliver the same message. The
+    // payload is small and stable per send, so a stringified compare is
+    // enough — within the same tick a duplicate is dropped.
+    let key = '';
+    try { key = msg.type + ':' + JSON.stringify(msg.payload); } catch (e) { key = msg.type; }
+    if (key === _lastMsgKey) return;
+    _lastMsgKey = key;
+    // Clear the de-dupe key after one tick so identical re-broadcasts (eg
+    // user clicks the same shader twice) still apply on the second click.
+    setTimeout(() => { if (_lastMsgKey === key) _lastMsgKey = ''; }, 50);
+    _onSyncMsg(msg);
+  }
+  function _onSyncMsg(msg) {
       if (!IS_PROJECTOR) {
         // controller side: only answer the handshake
         if (msg.type === 'projector-ready') {
@@ -3774,17 +3766,29 @@ void main() {
             state.customMode = payload.customMode === 'p5' ? 'glsl' : 'p5';
             setMode(payload.customMode);
           }
+          const _bodyChanged =
+            (state.customMode === 'p5' && payload.p5Body     && payload.p5Body     !== state.p5Body) ||
+            (state.customMode !== 'p5' && payload.customBody && payload.customBody !== state.customBody);
           if (payload.customBody) state.customBody = payload.customBody;
           if (payload.p5Body)     state.p5Body     = payload.p5Body;
           if (payload.entrance) _applyEntranceFromSync(payload.entrance);
-          // Apply the active body to drive the right pipeline.
-          if (state.customMode === 'p5') applyP5(state.p5Body);
-          else                            applyGLSL(state.customBody);
+          // Only run the heavy recompile path when the body actually
+          // changed. Repeated snapshots (e.g., re-handshake after a focus
+          // event) used to delete + rebuild the GL program every time,
+          // which caused a brief blank frame and made fast Custom↔Aurora
+          // toggling appear "stuck" / produce a white flash.
+          if (_bodyChanged) {
+            if (state.customMode === 'p5') applyP5(state.p5Body);
+            else                            applyGLSL(state.customBody);
+          }
           // If the controller is on a non-custom built-in, override.
           if (payload.activeIdx != null && payload.activeIdx !== CUSTOM_IDX) {
             activateShader(payload.activeIdx);
           } else if (payload.activeFavId) {
             loadFav(payload.activeFavId);
+          } else if (payload.activeIdx === CUSTOM_IDX) {
+            // Make sure Custom is active even when we skipped recompile.
+            activateShader(CUSTOM_IDX);
           }
         } else if (type === 'activate') {
           if (payload.favId)              loadFav(payload.favId);
@@ -3817,15 +3821,36 @@ void main() {
       } finally {
         _suspendSync = false;
       }
-    };
   }
+  // Wire both transports to the same dispatcher. BroadcastChannel is the
+  // primary path; window.postMessage is a redundant backup that survives
+  // Chrome's background-tab throttling on fullscreen popups.
+  if (bc) {
+    bc.onmessage = (ev) => _dispatchSyncMsg(ev.data || {});
+  }
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin) return;
+    _dispatchSyncMsg(ev.data || {});
+  });
   // When the projector boots, announce itself so the controller pushes a
   // fresh snapshot of everything (shaders, code, entrance image, …).
-  if (IS_PROJECTOR && bc) {
-    const _ping = () => { try { bc.postMessage({ type: 'projector-ready' }); } catch (e) {} };
+  // We send on BOTH transports because the controller may not yet have
+  // the projector handle (delayed by window.open's async open) and bc
+  // delivery is throttle-prone for fullscreen popups.
+  if (IS_PROJECTOR) {
+    const _ping = () => {
+      const msg = { __704sync: true, type: 'projector-ready', payload: {} };
+      if (bc) { try { bc.postMessage(msg); } catch (e) {} }
+      if (window.opener && !window.opener.closed) {
+        try { window.opener.postMessage(msg, location.origin); } catch (e) {}
+      }
+    };
     setTimeout(_ping, 200);
-    // The controller might launch a moment later; retry once more.
     setTimeout(_ping, 1200);
+    // (No focus-triggered re-ping: it forced the controller to resend a
+    // full snapshot, which re-ran applyGLSL and could briefly blank the
+    // canvas mid-shader-switch. Fine-grained 'activate' / 'glsl'
+    // messages keep state in sync without this.)
   }
 
   // ---------- broadcast / OBS-Spout capture mode ----------
@@ -3907,6 +3932,10 @@ void main() {
     try { if (_projectorWin && !_projectorWin.closed) _projectorWin.close(); }
     catch (e) { /* ignore */ }
     _projectorWin = window.open(url.toString(), '704_projector', features);
+    // Expose the handle so syncSend() can use postMessage as a redundant
+    // delivery channel (BroadcastChannel can be throttled for fullscreen
+    // popups on a non-focused monitor; direct postMessage isn't).
+    window.__704_projectorWin = _projectorWin;
     if (_projectorWin && rect) {
       // Some browsers ignore left/top on open(); nudge after creation.
       try { _projectorWin.moveTo(rect.left, rect.top); } catch (e) {}
@@ -4052,6 +4081,17 @@ void main() {
   resize();
   buildOverlay();
   rebuildDock();
+  // If the user persisted a non-default custom body, hand it through the
+  // SAME path Apply uses (applyGLSL) so the GL program, uniform layout,
+  // THUMB_FS, and the live Custom dock tile all end up consistent —
+  // doing this inline previously left the dock thumbHandle out of sync
+  // and produced white frames / sticky switching after a few toggles.
+  // applyGLSL leaves the active shader on CUSTOM_IDX; setActive(0)
+  // below resets it to Aurora so boot UX is unchanged.
+  if (state.customMode === 'p5') setMode('p5');
+  if (state.customMode !== 'p5' && state.customBody !== DEFAULT_CUSTOM_BODY) {
+    applyGLSL(state.customBody);
+  }
   setActive(0);
   markQualityChecked();
   // Synchronously paint at least one frame before handing off to RAF — if the
