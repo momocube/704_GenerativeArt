@@ -948,7 +948,7 @@
 
   <div class="sys-pill">
     <span class="dot"></span>
-    <span id="quality-label">render · ½</span>
+    <span id="quality-label">render · full</span>
     <span class="sep">/</span>
     <span id="fps">— fps</span>
     <span class="sep">/</span>
@@ -1888,7 +1888,7 @@ function draw() {
   // ---------- state ----------
   const state = {
     activeIdx: 0,
-    quality: 0.25,            // ¼ by default (was ½) — big perf jump for live preview
+    quality: 1.0,             // full 4K (2688×3840) by default
     fpsCap: 30,               // cap to 30fps; capture path is unaffected
     lastFrameT: 0,
     mouseDir: [0, 0, -1],
