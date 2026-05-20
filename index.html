@@ -1545,38 +1545,57 @@ void main() {
     }
   }
 
-  // If the projector was opened with ?fullscreen=1 we go true-fullscreen
-  // ASAP. The popup was launched with `window.open(..., 'fullscreen=yes')`
-  // from a user gesture in the controller — on Chrome 119+ with
-  // window-management permission that opens the popup *already* in OS
-  // fullscreen, so nothing more is needed. For older Chromium / Safari /
-  // Firefox we also call requestFullscreen() synchronously (must not
-  // await anything first — that would burn the gesture that window.open
-  // forwarded) and then asynchronously upgrade to the right screen via
-  // the Window Management API.
+  // If the projector was opened with ?fullscreen=1 we want OS-level
+  // fullscreen with no toolbar / URL bar / taskbar. Layered approach
+  // because no single API works across all browsers + permission states:
+  //
+  //   Layer A: window.open(..., 'popup=true,fullscreen=true,...') from
+  //            the controller — Chrome 122+ with window-management
+  //            permission opens the popup *already* in OS fullscreen.
+  //
+  //   Layer B: opener-driven popup.documentElement.requestFullscreen()
+  //            using the controller's gesture (set up in _openProjectorAt).
+  //
+  //   Layer C: this block — popup-side requestFullscreen attempts at
+  //            every lifecycle event we can hook, using whatever
+  //            inherited activation we have. Each event-fired attempt
+  //            consumes activation; we stop the moment fullscreen is
+  //            engaged so wasted calls don't burn the budget.
   if (IS_PROJECTOR && _projParams.get('fullscreen') === '1') {
     const wL = parseInt(_projParams.get('screen_left') || '', 10);
     const wT = parseInt(_projParams.get('screen_top')  || '', 10);
-    const tryFullscreen = (screen) => {
+    let _fsTarget = null;
+    let _fsDone = false;
+    const tryFullscreen = () => {
+      if (_fsDone || document.fullscreenElement) { _fsDone = true; return; }
       const opts = { navigationUI: 'hide' };
-      if (screen) opts.screen = screen;
-      return document.documentElement.requestFullscreen(opts);
+      if (_fsTarget) opts.screen = _fsTarget;
+      try {
+        document.documentElement.requestFullscreen(opts)
+          .then(() => { _fsDone = true; })
+          .catch(() => {});
+      } catch (e) { /* ignore */ }
     };
-    const enhanceWithScreen = () => {
-      if (!('getScreenDetails' in window)) return;
+    // Resolve the target screen ASAP. Permission was just granted on the
+    // opener side (same origin), so this should not prompt.
+    if ('getScreenDetails' in window && Number.isFinite(wL)) {
       window.getScreenDetails().then(det => {
-        let target = null;
-        if (Number.isFinite(wL) && Number.isFinite(wT)) {
-          target = det.screens.find(s => s.left === wL && s.top === wT) || null;
-        }
-        if (target) tryFullscreen(target).catch(() => {});
+        _fsTarget = det.screens.find(s => s.left === wL && s.top === wT) || null;
       }).catch(() => {});
-    };
-    try {
-      const p = tryFullscreen();
-      if (p && p.then) p.then(enhanceWithScreen).catch(() => {});
-      else enhanceWithScreen();
-    } catch (e) { /* ignore — fullscreen=yes likely already engaged */ }
+    }
+    // Fire at every plausible "page is ready" moment. Whichever fires
+    // first while activation is still valid wins; the rest are no-ops.
+    tryFullscreen();
+    document.addEventListener('readystatechange', tryFullscreen);
+    document.addEventListener('DOMContentLoaded', tryFullscreen, { once: true });
+    window.addEventListener('load', tryFullscreen, { once: true });
+    // Final safety net: ANY user interaction (mouse / key / touch)
+    // produces a fresh transient activation, so first input always
+    // succeeds even if every inherited-activation attempt above lost it.
+    const _userFs = () => { tryFullscreen(); };
+    window.addEventListener('pointerdown', _userFs, { once: true });
+    window.addEventListener('keydown',     _userFs, { once: true });
+    window.addEventListener('touchstart',  _userFs, { once: true, passive: true });
   }
 
   // ---------- WebGL setup ----------
@@ -3916,18 +3935,27 @@ void main() {
       url.searchParams.set('fullscreen', '1');
       url.searchParams.set('screen_left', String(rect.left));
       url.searchParams.set('screen_top',  String(rect.top));
-      // `fullscreen=yes` is Chrome 119+ fullscreen-popup, which (with
-      // window-management permission, which we just acquired by calling
-      // getScreenDetails()) opens the popup directly in OS-level
-      // fullscreen on the target screen — no title bar, no URL bar, no
-      // taskbar. Other browsers will ignore the feature; the projector
-      // window's onload code also tries requestFullscreen() as a backup,
-      // and shows a click-to-fullscreen overlay if even that fails.
-      features = `popup=yes,fullscreen=yes,left=${rect.left},top=${rect.top},width=${rect.width},height=${rect.height}` +
+      // Chrome's "fullscreen popup" feature (Window Management API):
+      // window.open() with `popup=true,fullscreen=true` opens the popup
+      // directly in OS-level fullscreen on the target screen — no title
+      // bar, no URL bar, no taskbar. Requirements:
+      //   • Chrome 122+ (was origin-trial in 119–121; shipped in 122)
+      //   • The `window-management` permission must be granted (we just
+      //     triggered the prompt by calling getScreenDetails() above)
+      //   • This window.open() must be in a user-gesture stack frame —
+      //     it is (this is inside a click handler on the picker item)
+      // Chrome's docs use `popup=true,fullscreen=true`; some sources use
+      // `=yes`. Chrome's parser is case-sensitive about the *value*
+      // ("true"/"yes" both legal per HTML spec but `=true` is what the
+      // official examples use — match those exactly to avoid edge-case
+      // parsing differences).
+      features = `popup=true,fullscreen=true` +
+                 `,left=${rect.left},top=${rect.top}` +
+                 `,width=${rect.width},height=${rect.height}` +
                  `,menubar=no,toolbar=no,location=no,status=no`;
     } else {
       const w = 768, h = Math.round(768 * 3840 / 2688);
-      features = `popup=yes,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`;
+      features = `popup=true,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`;
     }
     try { if (_projectorWin && !_projectorWin.closed) _projectorWin.close(); }
     catch (e) { /* ignore */ }
