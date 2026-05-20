@@ -3901,6 +3901,11 @@ void main() {
           // from a user gesture in some browsers — best-effort here.
           try { document.documentElement.requestFullscreen({ navigationUI: 'hide' }); }
           catch (e) { /* ignore */ }
+        } else if (type === 'close-projector') {
+          // Controller is opening a new projector window or shutting
+          // down — get out of the way so we don't pile up orphan
+          // popups on the user's other monitor.
+          try { window.close(); } catch (e) { /* ignore */ }
         }
       } finally {
         _suspendSync = false;
@@ -3978,6 +3983,21 @@ void main() {
     }
   }
 
+  // When the controller is closed or reloaded, tell any projector that
+  // was opened from a previous session to close itself. Without this,
+  // hitting refresh on the controller orphans the projector window on
+  // the secondary monitor — the new controller has no handle to it, so
+  // _projectorWin.close() can't reach it.
+  window.addEventListener('pagehide', () => {
+    try {
+      if (_projectorWin && !_projectorWin.closed) _projectorWin.close();
+    } catch (e) { /* ignore */ }
+    // pagehide can run before the BroadcastChannel message is flushed,
+    // but we still try — covers the common case where the channel
+    // delivery completes faster than the unload.
+    try { syncSend('close-projector', {}); } catch (e) { /* ignore */ }
+  });
+
   broadcastBtn.addEventListener('click', () => {
     setBroadcast(!document.body.classList.contains('broadcast'));
   });
@@ -4030,8 +4050,17 @@ void main() {
     // makes Chrome reuse the existing window (or treat the call as
     // navigation) and silently drop the fullscreen request. `_blank` is
     // what every Chrome official sample uses.
+    //
+    // Closing the previous popup happens via TWO paths:
+    //   1. window.close() on our local _projectorWin handle — works only
+    //      if it was opened in this very same controller session.
+    //   2. BroadcastChannel ping — closes any projector window opened by
+    //      a *previous* controller session that we no longer have a
+    //      handle to (typically after the user reloaded this page while
+    //      the projector was still open on another monitor).
     try { if (_projectorWin && !_projectorWin.closed) _projectorWin.close(); }
     catch (e) { /* ignore */ }
+    syncSend('close-projector', {});
     _projectorWin = window.open(url.toString(), '_blank', features);
     // Expose the handle so syncSend() can use postMessage as a redundant
     // delivery channel (BroadcastChannel can be throttled for fullscreen
