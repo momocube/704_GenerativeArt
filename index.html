@@ -984,7 +984,7 @@
       </svg>
     </button>
 
-    <button class="ico-btn" id="btn-broadcast" title="Broadcast / OBS capture mode (press B). Hides UI and removes letterbox so the captured frame is exactly the venue canvas (2688×3840). Right-click = open clean window in new tab for Spout window-capture." aria-label="Broadcast mode">
+    <button class="ico-btn" id="btn-broadcast" title="Broadcast / projection mode (press B). Click = toggle clean fullscreen in this window. Right-click = pick a target monitor and open a synced projector window — switching shaders here will live-update the projection without closing it." aria-label="Broadcast mode">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="2"/>
         <path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49"/>
@@ -1511,6 +1511,26 @@ void main() {
   // Index of the Custom shader in SHADERS (used by GLSL dispatch + JS UI hooks).
   const CUSTOM_IDX = 1;
 
+  // ---------- projector sync (BroadcastChannel) ----------
+  // The controller window (no ?broadcast) broadcasts every state change to
+  // any open projector window (?broadcast=1). The projector listens and
+  // applies — so switching shaders / editing code / changing the entrance
+  // never requires closing the projection. Declared up here so earlier
+  // helpers (saveEntranceState, applyGLSL, …) can call syncSend() / read
+  // IS_PROJECTOR. Function declarations are hoisted, so referencing values
+  // declared later (state, codeTA, …) is safe — they're only touched from
+  // event handlers that fire after init.
+  const _projParams = new URLSearchParams(location.search);
+  const IS_PROJECTOR = _projParams.has('broadcast') || _projParams.has('clean');
+  const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('704-projector-v1') : null;
+  let _syncMouseLast = 0;
+  let _suspendSync = false; // set while applying an incoming sync msg, so
+                            // projector-side state changes don't bounce back.
+  function syncSend(type, payload) {
+    if (!bc || IS_PROJECTOR || _suspendSync) return;
+    try { bc.postMessage({ type: type, payload: payload }); } catch (e) { /* ignore */ }
+  }
+
   // ---------- WebGL setup ----------
   const canvas = document.getElementById('bg');
   const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
@@ -1787,7 +1807,12 @@ function draw() {
     try {
       // Exclude _cachedImg (HTMLImageElement isn't serializable)
       const { _cachedImg, ...persistable } = state.entrance;
-      localStorage.setItem('shaderWallpapers.venue.entrance.v1', JSON.stringify(persistable));
+      // Projector windows must not overwrite the controller's persisted
+      // entrance — they're just mirrors, not authors.
+      if (!IS_PROJECTOR) {
+        localStorage.setItem('shaderWallpapers.venue.entrance.v1', JSON.stringify(persistable));
+      }
+      syncSend('entrance', persistable);
     } catch (e) { /* over quota? ignore */ }
   }
 
@@ -1993,7 +2018,14 @@ function draw() {
   function updateMouseFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
     if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
-      state.mouseValid = 0; return;
+      state.mouseValid = 0;
+      // Tell the projector the cursor left the canvas, but throttle.
+      const _t = performance.now();
+      if (!IS_PROJECTOR && _t - _syncMouseLast > 100) {
+        _syncMouseLast = _t;
+        syncSend('mouse', { dir: state.mouseDir, valid: 0 });
+      }
+      return;
     }
     const [px, py] = clientToVenuePx(e.clientX, e.clientY);
     const hit = pxToFaceDir(px, py);
@@ -2002,6 +2034,12 @@ function draw() {
       state.mouseValid = 1;
     } else {
       state.mouseValid = 0;
+    }
+    // Mirror to projector (throttled to ~30Hz to keep the channel light).
+    const now = performance.now();
+    if (!IS_PROJECTOR && now - _syncMouseLast > 33) {
+      _syncMouseLast = now;
+      syncSend('mouse', { dir: state.mouseDir, valid: state.mouseValid });
     }
   }
   window.addEventListener('mousemove', updateMouseFromEvent);
@@ -2019,6 +2057,9 @@ function draw() {
     const t = (performance.now() / 1000) - state.startTime;
     state.clicks.push({ dir: hit.dir, t, vx: px / VENUE_W, vy: py / VENUE_H });
     if (state.clicks.length > 8) state.clicks.shift();
+    // Mirror click to projector — it'll spawn its own ripple at the same
+    // venue-relative position so the wallpaper "responds" identically.
+    syncSend('click', { dir: hit.dir, vx: px / VENUE_W, vy: py / VENUE_H });
     // viewport pulse
     const el = document.createElement('div');
     el.className = 'click-pulse';
@@ -2483,6 +2524,7 @@ void main() {
   function activateShader(i) {
     activeFavId = null;
     setActive(i);
+    syncSend('activate', { shaderIdx: i });
   }
 
   function activateEntry(entry) {
@@ -2774,7 +2816,10 @@ void main() {
     setStatus('Mode: ' + (mode === 'glsl' ? 'GLSL fragment' : 'p5.js sketch') +
               ' · press Apply to run.', null);
   }
-  codeModeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  codeModeBtns.forEach(b => b.addEventListener('click', () => {
+    setMode(b.dataset.mode);
+    syncSend('mode', { mode: b.dataset.mode });
+  }));
 
   // p5 unfold mode toggle
   const unfoldBtns = document.querySelectorAll('#cp-unfold button');
@@ -2841,6 +2886,7 @@ void main() {
     setP5Active(false);
     setActive(CUSTOM_IDX);
     setStatus('GLSL compiled OK · ' + body.split('\n').length + ' lines.', 'ok');
+    syncSend('glsl', { body: body });
     return true;
   }
 
@@ -2882,6 +2928,7 @@ void main() {
       ' · ' + lines + ' lines.',
       'ok'
     );
+    syncSend('p5', { body: body });
     return true;
   }
 
@@ -3552,6 +3599,126 @@ void main() {
     if (!e.target.closest('#entrance-wrap')) entWrap.classList.remove('open');
   });
 
+  // ---------- projector sync receive + snapshot ----------
+  // The send side is wired up via syncSend() calls sprinkled at every
+  // state-change site above; this block handles incoming messages (the
+  // projector applies them; the controller only listens for the
+  // 'projector-ready' handshake so it can push a full snapshot).
+  function _syncSnapshotPayload() {
+    return {
+      activeIdx: state.activeIdx,
+      activeFavId: activeFavId,
+      customMode: state.customMode,
+      customBody: state.customBody,
+      p5Body: state.p5Body,
+      entrance: (function () {
+        const { _cachedImg, ...e } = state.entrance;
+        return e;
+      })(),
+    };
+  }
+  function _applyEntranceFromSync(e) {
+    if (!e) return;
+    state.entrance.mode        = e.mode;
+    state.entrance.color       = e.color;
+    state.entrance.shaderId    = e.shaderId;
+    state.entrance.shaderBody  = e.shaderBody || '';
+    state.entrance.shaderFavId = e.shaderFavId || null;
+    state.entrance.shaderName  = e.shaderName || '';
+    state.entrance.imageScale  = e.imageScale != null ? e.imageScale : 1;
+    state.entrance.imageRot    = e.imageRot   || 0;
+    state.entrance.imageAspect = e.imageAspect || 1;
+    if (e.imageDataUrl && e.imageDataUrl !== state.entrance.imageDataUrl) {
+      state.entrance.imageDataUrl = e.imageDataUrl;
+      const img = new Image();
+      img.onload = () => {
+        state.entrance._cachedImg = img;
+        try { uploadEntranceImage(img); } catch (er) { /* ignore */ }
+      };
+      img.src = e.imageDataUrl;
+    } else if (!e.imageDataUrl) {
+      state.entrance.imageDataUrl = null;
+      state.entrance._cachedImg = null;
+    }
+    recompileMainWithEntrance();
+    if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
+  }
+  if (bc) {
+    bc.onmessage = (ev) => {
+      const msg = ev.data || {};
+      if (!IS_PROJECTOR) {
+        // controller side: only answer the handshake
+        if (msg.type === 'projector-ready') {
+          syncSend('snapshot', _syncSnapshotPayload());
+        }
+        return;
+      }
+      // projector side: apply
+      _suspendSync = true;
+      try {
+        const { type, payload } = msg;
+        if (type === 'snapshot') {
+          if (payload.customMode && payload.customMode !== state.customMode) {
+            // setMode() writes the current textarea back into its mode's
+            // body before switching — drop that overwrite by flipping the
+            // flag first.
+            state.customMode = payload.customMode === 'p5' ? 'glsl' : 'p5';
+            setMode(payload.customMode);
+          }
+          if (payload.customBody) state.customBody = payload.customBody;
+          if (payload.p5Body)     state.p5Body     = payload.p5Body;
+          if (payload.entrance) _applyEntranceFromSync(payload.entrance);
+          // Apply the active body to drive the right pipeline.
+          if (state.customMode === 'p5') applyP5(state.p5Body);
+          else                            applyGLSL(state.customBody);
+          // If the controller is on a non-custom built-in, override.
+          if (payload.activeIdx != null && payload.activeIdx !== CUSTOM_IDX) {
+            activateShader(payload.activeIdx);
+          } else if (payload.activeFavId) {
+            loadFav(payload.activeFavId);
+          }
+        } else if (type === 'activate') {
+          if (payload.favId)              loadFav(payload.favId);
+          else if (payload.shaderIdx != null) activateShader(payload.shaderIdx);
+        } else if (type === 'glsl') {
+          if (codeTA) codeTA.value = payload.body;
+          state.customBody = payload.body;
+          applyGLSL(payload.body);
+        } else if (type === 'p5') {
+          if (codeTA) codeTA.value = payload.body;
+          state.p5Body = payload.body;
+          applyP5(payload.body);
+        } else if (type === 'mode') {
+          if (payload.mode && payload.mode !== state.customMode) setMode(payload.mode);
+        } else if (type === 'entrance') {
+          _applyEntranceFromSync(payload);
+        } else if (type === 'mouse') {
+          if (payload.dir) state.mouseDir = payload.dir;
+          state.mouseValid = payload.valid ? 1 : 0;
+        } else if (type === 'click') {
+          const t = (performance.now() / 1000) - state.startTime;
+          state.clicks.push({ dir: payload.dir, t, vx: payload.vx, vy: payload.vy });
+          if (state.clicks.length > 8) state.clicks.shift();
+        } else if (type === 'go-fullscreen') {
+          // Controller asked us to fill the screen. Needs to be triggered
+          // from a user gesture in some browsers — best-effort here.
+          try { document.documentElement.requestFullscreen({ navigationUI: 'hide' }); }
+          catch (e) { /* ignore */ }
+        }
+      } finally {
+        _suspendSync = false;
+      }
+    };
+  }
+  // When the projector boots, announce itself so the controller pushes a
+  // fresh snapshot of everything (shaders, code, entrance image, …).
+  if (IS_PROJECTOR && bc) {
+    const _ping = () => { try { bc.postMessage({ type: 'projector-ready' }); } catch (e) {} };
+    setTimeout(_ping, 200);
+    // The controller might launch a moment later; retry once more.
+    setTimeout(_ping, 1200);
+  }
+
   // ---------- broadcast / OBS-Spout capture mode ----------
   // Browsers can't natively send Spout (Spout = D3D11 shared texture, native
   // Windows only), but we can present a clean 2688×3840 capture surface
@@ -3596,19 +3763,110 @@ void main() {
   broadcastBtn.addEventListener('click', () => {
     setBroadcast(!document.body.classList.contains('broadcast'));
   });
-  // Right-click on broadcast btn = open a clean broadcast popup in a new tab,
-  // useful for Spout/NDI window-capture bridges (capture just that tab/window).
-  broadcastBtn.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
+  // Right-click on broadcast btn = open a clean projector window. If the
+  // Window Management API is available + permitted we show a picker so the
+  // user can send the projector straight to the target monitor at its
+  // native bounds (no dragging across screens, no F11). The projector
+  // mirrors state via BroadcastChannel, so switching shaders in this
+  // controller window keeps it live — no need to close the projector.
+  let _projectorWin = null;
+  function _openProjectorAt(rect) {
     const url = new URL(location.href);
     url.searchParams.set('broadcast', '1');
     url.searchParams.set('q', '1');
-    // Best-effort popup sized to the venue's aspect ratio so window-capture
-    // gets exactly the canvas with no chrome. Many browsers ignore this on
-    // newer/PWA contexts, but it's harmless when they do.
-    const w = 768, h = Math.round(768 * 3840 / 2688);
-    window.open(url.toString(), '_blank',
-      `popup=yes,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`);
+    let features;
+    if (rect && Number.isFinite(rect.left)) {
+      // Position + size at the target screen so it fills it. The user can
+      // press F11 (or we ask the projector to requestFullscreen()) to
+      // remove window chrome.
+      features = `popup=yes,left=${rect.left},top=${rect.top},width=${rect.width},height=${rect.height}` +
+                 `,menubar=no,toolbar=no,location=no,status=no`;
+    } else {
+      const w = 768, h = Math.round(768 * 3840 / 2688);
+      features = `popup=yes,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`;
+    }
+    try { if (_projectorWin && !_projectorWin.closed) _projectorWin.close(); }
+    catch (e) { /* ignore */ }
+    _projectorWin = window.open(url.toString(), '704_projector', features);
+    if (_projectorWin && rect) {
+      // Some browsers ignore left/top on open(); nudge after creation.
+      try { _projectorWin.moveTo(rect.left, rect.top); } catch (e) {}
+      try { _projectorWin.resizeTo(rect.width, rect.height); } catch (e) {}
+      // Ask the projector to go fullscreen once it's ready. Browsers that
+      // require a user-activation may ignore this; the open() click is
+      // counted as a gesture in Chromium when same-origin.
+      setTimeout(() => { syncSend('go-fullscreen', {}); }, 600);
+    }
+  }
+  // Tiny popover for screen choices
+  const _screenPop = document.createElement('div');
+  _screenPop.className = 'pop-menu';
+  _screenPop.style.position = 'fixed';
+  _screenPop.style.zIndex = '50';
+  _screenPop.style.opacity = '0';
+  _screenPop.style.pointerEvents = 'none';
+  _screenPop.style.transform = 'translateY(8px)';
+  _screenPop.style.minWidth = '240px';
+  document.body.appendChild(_screenPop);
+  function _hideScreenPop() {
+    _screenPop.style.opacity = '0';
+    _screenPop.style.pointerEvents = 'none';
+    _screenPop.style.transform = 'translateY(8px)';
+  }
+  function _showScreenPop(items, anchor) {
+    _screenPop.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'head';
+    head.textContent = 'Project to…';
+    _screenPop.appendChild(head);
+    items.forEach(it => {
+      const b = document.createElement('button');
+      b.innerHTML = '<span>' + it.label + '</span><b>' + it.meta + '</b>';
+      b.addEventListener('click', () => {
+        _hideScreenPop();
+        _openProjectorAt(it.rect);
+      });
+      _screenPop.appendChild(b);
+    });
+    const r = anchor.getBoundingClientRect();
+    _screenPop.style.right = (window.innerWidth - r.right) + 'px';
+    _screenPop.style.bottom = (window.innerHeight - r.top + 10) + 'px';
+    _screenPop.style.opacity = '1';
+    _screenPop.style.pointerEvents = 'auto';
+    _screenPop.style.transform = 'translateY(0)';
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#btn-broadcast') && !e.target.closest('.pop-menu')) _hideScreenPop();
+  });
+  async function _projectorMenuFromButton() {
+    const items = [];
+    let usedScreenDetails = false;
+    if ('getScreenDetails' in window) {
+      try {
+        const det = await window.getScreenDetails();
+        usedScreenDetails = true;
+        det.screens.forEach((s, i) => {
+          items.push({
+            label: (s.label || ('Display ' + (i + 1))) + (s.isPrimary ? ' · primary' : ''),
+            meta: s.width + '×' + s.height,
+            rect: { left: s.availLeft, top: s.availTop, width: s.availWidth, height: s.availHeight },
+          });
+        });
+      } catch (err) {
+        // Permission denied or unsupported — fall through.
+      }
+    }
+    // Always offer a "windowed popup" fallback so user has an escape hatch.
+    items.push({
+      label: usedScreenDetails ? 'Windowed popup' : 'Windowed popup (drag to your second display)',
+      meta: usedScreenDetails ? '768×1097' : 'requires permission for monitor picker',
+      rect: null,
+    });
+    _showScreenPop(items, broadcastBtn);
+  }
+  broadcastBtn.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    _projectorMenuFromButton();
   });
   broadcastHud.addEventListener('click', () => setBroadcast(false));
 
