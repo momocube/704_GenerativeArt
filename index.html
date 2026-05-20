@@ -2379,9 +2379,47 @@ void main() {
   }
   let THUMB_FS = buildThumbFS(state.customBody);
 
+  // ----- shared GL context for all tile thumbnails -----
+  // Browsers cap WebGL contexts to ~8–16 per page. Giving every dock
+  // tile its own context (which the previous implementation did) caused
+  // the OLDEST context — the main venue canvas — to be evicted as soon
+  // as the user had a handful of favourites, leaving the page black with
+  // "Too many active WebGL contexts" warnings. Now every tile shares ONE
+  // offscreen WebGL context: each frame renders a tile's program into
+  // the shared canvas, then copies the result to the tile's *2D* canvas
+  // via drawImage(). The tile elements themselves consume zero WebGL
+  // contexts.
+  let _thumbGL = null;
+  let _thumbGLCanvas = null;
+  let _thumbSharedBuf = null;
+  function _getThumbGL() {
+    if (_thumbGL) return _thumbGL;
+    _thumbGLCanvas = document.createElement('canvas');
+    _thumbGLCanvas.width = 112;
+    _thumbGLCanvas.height = 112;
+    _thumbGL = _thumbGLCanvas.getContext('webgl', {
+      antialias: false,
+      // Required so drawImage(_thumbGLCanvas) sees the rendered pixels —
+      // without this the buffer is cleared after each compositing tick.
+      preserveDrawingBuffer: true,
+    });
+    if (!_thumbGL) return null;
+    _thumbSharedBuf = _thumbGL.createBuffer();
+    _thumbGL.bindBuffer(_thumbGL.ARRAY_BUFFER, _thumbSharedBuf);
+    _thumbGL.bufferData(_thumbGL.ARRAY_BUFFER,
+      new Float32Array([-1,-1, 3,-1, -1,3]), _thumbGL.STATIC_DRAW);
+    return _thumbGL;
+  }
+
   function renderThumbnailFlat(canvasEl, shaderIdx, fsOverride) {
-    const tgl = canvasEl.getContext('webgl', { antialias: false });
+    const tgl = _getThumbGL();
     if (!tgl) return null;
+    // Tile canvas is 2D — it just displays the snapshot from the shared
+    // offscreen WebGL canvas. NEVER call getContext('webgl') on it.
+    const ctx2d = canvasEl.getContext('2d');
+    if (!ctx2d) return null;
+    canvasEl.width = 112;
+    canvasEl.height = 112;
     let tp = null;
     let u = null;
     let alive = true;
@@ -2409,7 +2447,6 @@ void main() {
       }
       if (tp) tgl.deleteProgram(tp);
       tp = np;
-      tgl.useProgram(tp);
       u = {
         res: tgl.getUniformLocation(tp, 'u_res'),
         time: tgl.getUniformLocation(tp, 'u_time'),
@@ -2424,18 +2461,16 @@ void main() {
 
     if (!buildThumbProgram(fsOverride || THUMB_FS)) return null;
 
-    const tb = tgl.createBuffer();
-    tgl.bindBuffer(tgl.ARRAY_BUFFER, tb);
-    tgl.bufferData(tgl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), tgl.STATIC_DRAW);
-    tgl.enableVertexAttribArray(0);
-    tgl.vertexAttribPointer(0, 2, tgl.FLOAT, false, 0, 0);
-    canvasEl.width = 112; canvasEl.height = 112;
-    tgl.viewport(0, 0, 112, 112);
     const seed = shaderIdx * 7.3;
     let f = 0;
     function loop() {
       if (!alive) return;
       if (!tp || !u) { requestAnimationFrame(loop); return; }
+      tgl.useProgram(tp);
+      tgl.bindBuffer(tgl.ARRAY_BUFFER, _thumbSharedBuf);
+      tgl.enableVertexAttribArray(0);
+      tgl.vertexAttribPointer(0, 2, tgl.FLOAT, false, 0, 0);
+      tgl.viewport(0, 0, 112, 112);
       const t = seed + f * 0.03;
       tgl.uniform2f(u.res, 112, 112);
       tgl.uniform1f(u.time, t);
@@ -2445,6 +2480,13 @@ void main() {
       tgl.uniform1i(u.clickCount, 0);
       tgl.uniform1i(u.shaderId, shaderIdx);
       tgl.drawArrays(tgl.TRIANGLES, 0, 3);
+      // Snapshot the shared offscreen canvas into this tile's 2D canvas.
+      // drawImage is GPU-fast on modern browsers; the small 112×112 size
+      // makes this trivial even with a dozen tiles ticking concurrently.
+      try {
+        ctx2d.clearRect(0, 0, 112, 112);
+        ctx2d.drawImage(_thumbGLCanvas, 0, 0);
+      } catch (e) { /* ignore */ }
       f++;
       requestAnimationFrame(loop);
     }
@@ -2455,18 +2497,9 @@ void main() {
         alive = false;
         if (tp) tgl.deleteProgram(tp);
         tp = null;
-        // Explicitly release the WebGL context. Without this, Chrome /
-        // Firefox count this canvas's context against the per-page limit
-        // (~16) until GC runs. rebuildDock() recreates all tile
-        // contexts every favorite click, so after a handful of clicks
-        // the limit is reached and the OLDEST context — the main
-        // venue canvas — is killed, leaving the whole page black with
-        // a "Too many active WebGL contexts" warning. loseContext()
-        // releases the context immediately so we never accumulate.
-        try {
-          const ext = tgl.getExtension('WEBGL_lose_context');
-          if (ext) ext.loseContext();
-        } catch (e) { /* ignore */ }
+        // No GL context to release here — the tile owns only a 2D
+        // canvas. The shared offscreen WebGL context lives for the
+        // lifetime of the page.
       },
     };
   }
