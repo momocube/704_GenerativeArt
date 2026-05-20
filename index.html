@@ -2451,7 +2451,23 @@ void main() {
     loop();
     return {
       rebuild: (newFsSrc) => buildThumbProgram(newFsSrc),
-      dispose: () => { alive = false; if (tp) tgl.deleteProgram(tp); tp = null; },
+      dispose: () => {
+        alive = false;
+        if (tp) tgl.deleteProgram(tp);
+        tp = null;
+        // Explicitly release the WebGL context. Without this, Chrome /
+        // Firefox count this canvas's context against the per-page limit
+        // (~16) until GC runs. rebuildDock() recreates all tile
+        // contexts every favorite click, so after a handful of clicks
+        // the limit is reached and the OLDEST context — the main
+        // venue canvas — is killed, leaving the whole page black with
+        // a "Too many active WebGL contexts" warning. loseContext()
+        // releases the context immediately so we never accumulate.
+        try {
+          const ext = tgl.getExtension('WEBGL_lose_context');
+          if (ext) ext.loseContext();
+        } catch (e) { /* ignore */ }
+      },
     };
   }
 
@@ -3207,8 +3223,14 @@ void main() {
     applyCustomCode();
     // applyCustomCode -> setActive -> updateActiveTileClasses uses activeFavId,
     // but if the favorite is brand-new (first load) the dock may not yet have a
-    // tile for it. rebuildDock keeps everything in sync.
-    rebuildDock();
+    // tile for it. Only rebuild the dock when that's actually the case —
+    // doing it unconditionally was creating fresh WebGL contexts for every
+    // tile on every fav click, blowing past the per-page context limit and
+    // eventually killing the main canvas (the symptom: black screen that
+    // never recovers).
+    const favTileExists = dockEntries.some(e => e.kind === 'fav' && e.favId === id);
+    if (!favTileExists) rebuildDock();
+    else                updateActiveTileClasses();
   }
 
   favSaveBtn.addEventListener('click', saveCurrentAsFav);
