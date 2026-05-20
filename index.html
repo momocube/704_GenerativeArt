@@ -2889,7 +2889,11 @@ void main() {
   const codeModeLabel = document.getElementById('cp-mode-label');
   const codeHintGLSL  = document.getElementById('cp-hint-glsl');
   const codeHintP5    = document.getElementById('cp-hint-p5');
-  codeTA.value = state.customBody;
+  // Use the persisted mode's body — if the user last had p5 selected,
+  // showing the GLSL body here would lose their p5 sketch after setMode
+  // (now or via a later mode toggle) writes the textarea back into
+  // state.p5Body.
+  codeTA.value = state.customMode === 'p5' ? state.p5Body : state.customBody;
 
   function setStatus(msg, kind) {
     codeStat.textContent = msg;
@@ -2898,10 +2902,16 @@ void main() {
   }
 
   function setMode(mode) {
-    // save the textarea contents into whatever mode we're currently in
-    if (state.customMode === 'glsl') state.customBody = codeTA.value;
-    else state.p5Body = codeTA.value;
-
+    // Save the textarea contents into whatever mode we're currently in —
+    // BUT only if we're actually switching modes. Calling setMode(mode)
+    // with mode === state.customMode (e.g., on boot to sync the UI to
+    // the persisted mode) used to clobber the target body with whatever
+    // happened to be in codeTA.value at that moment, silently losing
+    // the persisted other-mode body across reloads.
+    if (state.customMode !== mode) {
+      if (state.customMode === 'glsl') state.customBody = codeTA.value;
+      else state.p5Body = codeTA.value;
+    }
     state.customMode = mode;
     codeModeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
     codeModeLabel.textContent = mode === 'glsl' ? 'GLSL' : 'p5.js';
@@ -4173,17 +4183,16 @@ void main() {
   resize();
   buildOverlay();
   rebuildDock();
-  // If the user persisted a non-default custom body, hand it through the
-  // SAME path Apply uses (applyGLSL) so the GL program, uniform layout,
-  // THUMB_FS, and the live Custom dock tile all end up consistent —
-  // doing this inline previously left the dock thumbHandle out of sync
-  // and produced white frames / sticky switching after a few toggles.
-  // applyGLSL leaves the active shader on CUSTOM_IDX; setActive(0)
-  // below resets it to Aurora so boot UX is unchanged.
+  // Sync the editor UI to the persisted mode if it was p5 (setMode now
+  // detects same-mode calls and won't clobber the bodies).
   if (state.customMode === 'p5') setMode('p5');
-  if (state.customMode !== 'p5' && state.customBody !== DEFAULT_CUSTOM_BODY) {
-    applyGLSL(state.customBody);
-  }
+  // NOTE: we deliberately do NOT auto-applyGLSL the persisted custom
+  // body here. That used to rebuild the GL program during boot and
+  // produced a brief black frame when later toggling shaders. The body
+  // is still persisted (saveCodeState) and shows up in the editor; press
+  // Apply once after a reload to make it live. Projector windows
+  // receive the same body via the snapshot handshake, so projection is
+  // unaffected.
   setActive(0);
   markQualityChecked();
   // Synchronously paint at least one frame before handing off to RAF — if the
