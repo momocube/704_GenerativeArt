@@ -1,0 +1,3692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Shader Wallpapers — Venue (704 / 2688×3840)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<style>
+  :root {
+    --ink: #f4f6fa;
+    --ink-dim: rgba(244,246,250,0.62);
+    --ink-faint: rgba(244,246,250,0.30);
+    --glass: rgba(14,16,22,0.55);
+    --glass-edge: rgba(244,246,250,0.10);
+    --glass-edge-bright: rgba(244,246,250,0.22);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: #05060a;
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Venue stage: portrait 2688:3840 = 7:10. Letterboxed in viewport. */
+  .stage {
+    position: fixed; inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+  .stage-inner {
+    position: relative;
+    aspect-ratio: 2688 / 3840;
+    height: 100vh;
+    max-width: 100vw;
+    box-shadow: 0 40px 120px -20px rgba(0,0,0,0.8);
+  }
+  canvas#bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    cursor: crosshair;
+    image-rendering: pixelated;
+  }
+
+  /* Face label overlay (positioned in % of stage-inner; matches venue rects) */
+  .face-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  body.no-overlay .face-overlay { opacity: 0; }
+  .face-rect {
+    position: absolute;
+    border: 1px dashed rgba(255,255,255,0.18);
+    box-sizing: border-box;
+  }
+  .face-rect.entrance {
+    border-color: rgba(255,200,120,0.45);
+    border-style: solid;
+    border-width: 1.5px;
+  }
+  .face-rect .face-label {
+    position: absolute;
+    top: 8px; left: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.70);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.35);
+    padding: 3px 7px;
+    border-radius: 3px;
+    backdrop-filter: blur(4px);
+  }
+  .face-rect.entrance .face-label {
+    color: #ffd9a8;
+    background: rgba(70,40,10,0.55);
+  }
+  .face-rect .face-meta {
+    position: absolute;
+    bottom: 8px; left: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.45);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+  }
+
+  /* Top-left venue label */
+  .venue-tag {
+    position: fixed;
+    top: 24px; left: 28px;
+    z-index: 5;
+    pointer-events: none;
+    user-select: none;
+  }
+  .venue-tag .name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .venue-tag .res {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+  .venue-tag .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+  }
+
+  /* System pill top-right */
+  .sys-pill {
+    position: fixed;
+    top: 26px; right: 28px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 14px;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .sys-pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #6f6;
+    box-shadow: 0 0 8px #6f6;
+  }
+  .sys-pill .sep { color: var(--ink-faint); }
+
+  /* Bottom-right info */
+  .info-card {
+    position: fixed;
+    right: 28px; bottom: 28px;
+    z-index: 5;
+    max-width: 280px;
+    padding: 14px 16px 16px;
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
+  }
+  .info-card .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-faint);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .info-card h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .info-card p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-dim);
+  }
+
+  /* Dock — bottom center */
+  .dock {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 18px;
+  }
+  .dock .tile {
+    width: 56px; height: 56px;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    border: 1px solid transparent;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .dock .tile:hover { transform: translateY(-3px); }
+  .dock .tile.active {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 2px rgba(244,246,250,0.18);
+    transform: translateY(-4px);
+  }
+  .dock .tile canvas {
+    width: 100%; height: 100%;
+    display: block;
+  }
+  .dock .tile .label {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 12px 4px 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    text-align: center;
+    color: #fff;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.6));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dock .tile.fav {
+    border-color: rgba(255,220,130,0.18);
+  }
+  .dock .tile.fav.active {
+    border-color: #ffd984;
+    box-shadow: 0 0 0 2px rgba(255,220,130,0.22);
+  }
+  .dock .tile .fav-star {
+    position: absolute;
+    top: 4px; right: 5px;
+    font-size: 11px;
+    line-height: 1;
+    color: #ffd984;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    pointer-events: none;
+  }
+  .dock .sep-vert {
+    width: 1px; height: 32px;
+    background: var(--glass-edge);
+    margin: 0 4px;
+  }
+  .dock .ico-btn {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--ink-dim);
+    background: transparent;
+    border: none;
+    transition: background 0.2s, color 0.2s;
+  }
+  .dock .ico-btn:hover { background: rgba(244,246,250,0.08); color: var(--ink); }
+  .dock .ico-btn.active { background: rgba(244,246,250,0.12); color: var(--ink); }
+  .dock .ico-btn svg { width: 16px; height: 16px; }
+
+  /* Quality + capture menus share popover style */
+  .pop-wrap { position: relative; }
+  .pop-menu {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    right: -8px;
+    min-width: 200px;
+    padding: 6px;
+    background: rgba(14,16,22,0.92);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 10px;
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7);
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2,0.8,0.2,1);
+  }
+  .pop-wrap.open .pop-menu { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .pop-menu .head {
+    padding: 7px 10px 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .pop-menu button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    text-align: left;
+  }
+  .pop-menu button:hover { background: rgba(244,246,250,0.08); }
+  .pop-menu button b {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.04em;
+  }
+  .pop-menu button.checked::before {
+    content: "✓ ";
+    color: #aef;
+  }
+
+  /* Entrance background popup */
+  .pop-menu.entrance-menu {
+    min-width: 280px;
+    padding: 10px 12px 12px;
+  }
+  .entrance-menu .ent-modes {
+    display: flex;
+    gap: 4px;
+    margin: 6px 0 10px;
+    padding: 3px;
+    background: rgba(244,246,250,0.05);
+    border: 1px solid var(--glass-edge);
+    border-radius: 7px;
+  }
+  .entrance-menu .ent-modes button {
+    flex: 1;
+    padding: 6px 4px;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .entrance-menu .ent-modes button:hover { color: var(--ink); }
+  .entrance-menu .ent-modes button.active {
+    background: rgba(170,238,255,0.18);
+    color: #d8f0ff;
+  }
+  .entrance-menu .ent-body { padding: 4px 2px 0; }
+  .entrance-menu .ent-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .entrance-menu .ent-row > span { min-width: 56px; }
+  .entrance-menu .ent-row input[type="color"] {
+    width: 40px; height: 28px;
+    padding: 0;
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .entrance-menu .ent-row input[type="file"] {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+  }
+  .entrance-menu .ent-row input[type="file"]::file-selector-button {
+    margin-right: 8px;
+    padding: 5px 9px;
+    background: rgba(244,246,250,0.06);
+    border: 1px solid var(--glass-edge);
+    border-radius: 5px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .entrance-menu .ent-row input[type="file"]::file-selector-button:hover {
+    background: rgba(244,246,250,0.12);
+  }
+  .entrance-menu .ent-row select {
+    flex: 1;
+    padding: 6px 8px;
+    background: rgba(244,246,250,0.06);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    /* Tell the browser to render the native dropdown popup with a dark palette
+       so the option list matches the rest of the UI instead of defaulting to
+       white. Also style options directly as a fallback. */
+    color-scheme: dark;
+  }
+  .entrance-menu .ent-row select option,
+  .entrance-menu .ent-row select optgroup {
+    background: #0e1016;
+    color: var(--ink);
+  }
+  .entrance-menu .ent-row select optgroup {
+    color: var(--ink-dim);
+    font-style: normal;
+    letter-spacing: 0.08em;
+  }
+  .entrance-menu .ent-preview-wrap {
+    position: relative;
+    margin-top: 8px;
+    aspect-ratio: 640 / 512;
+    max-height: 140px;
+    border: 1px dashed var(--glass-edge);
+    border-radius: 7px;
+    overflow: hidden;
+    background: #0a0c12;
+  }
+  .entrance-menu .ent-preview {
+    display: block;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .entrance-menu .ent-preview.has-image { opacity: 1; }
+  .entrance-menu .ent-clear {
+    position: absolute;
+    top: 6px; right: 6px;
+    padding: 4px 9px;
+    background: rgba(14,16,22,0.85);
+    border: 1px solid var(--glass-edge);
+    border-radius: 5px;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .entrance-menu .ent-clear:hover {
+    color: #ffb0b0;
+    background: rgba(255,80,80,0.18);
+  }
+  .entrance-menu .ent-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    padding: 4px 0;
+  }
+  .entrance-menu .ent-row-slider input[type="range"] {
+    flex: 1;
+    accent-color: #aef;
+  }
+  .entrance-menu .ent-row-slider .ent-val {
+    min-width: 46px;
+    text-align: right;
+    font-size: 10px;
+    color: var(--ink-dim);
+  }
+  .entrance-menu .ent-val-input {
+    width: 58px;
+    padding: 4px 6px;
+    background: rgba(244,246,250,0.06);
+    border: 1px solid var(--glass-edge);
+    border-radius: 5px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-align: right;
+    color-scheme: dark;
+    -moz-appearance: textfield;
+  }
+  .entrance-menu .ent-val-input:focus {
+    outline: none;
+    border-color: rgba(170,238,255,0.5);
+    background: rgba(170,238,255,0.08);
+  }
+  .entrance-menu .ent-val-input::-webkit-outer-spin-button,
+  .entrance-menu .ent-val-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .entrance-menu .ent-reset {
+    margin-top: 4px;
+    width: 100%;
+    padding: 6px 8px;
+    background: transparent;
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .entrance-menu .ent-reset:hover {
+    background: rgba(244,246,250,0.08);
+    color: var(--ink);
+    border-color: var(--glass-edge-bright);
+  }
+
+  /* Click pulse */
+  .click-pulse {
+    position: fixed;
+    pointer-events: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.6);
+    transform: translate(-50%, -50%) scale(0);
+    z-index: 4;
+    animation: pulse 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  }
+  @keyframes pulse {
+    0%   { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(8); opacity: 0; }
+  }
+
+  /* Code editor panel */
+  .code-panel {
+    position: fixed;
+    left: 28px;
+    bottom: 28px;
+    z-index: 6;
+    width: 520px;
+    max-width: calc(100vw - 56px);
+    background: rgba(14,16,22,0.92);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7);
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2,0.8,0.2,1);
+    overflow: hidden;
+  }
+  .code-panel.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .code-panel .cp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--glass-edge);
+  }
+  .code-panel .cp-mode {
+    display: flex;
+    gap: 0;
+    background: rgba(244,246,250,0.05);
+    border: 1px solid var(--glass-edge);
+    border-radius: 7px;
+    padding: 2px;
+  }
+  .code-panel .cp-mode button {
+    padding: 5px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .code-panel .cp-mode button:hover { color: var(--ink); }
+  .code-panel .cp-mode button.active {
+    background: rgba(170,238,255,0.18);
+    color: #d8f0ff;
+  }
+
+  /* p5 canvas overlay — shown only when Custom shader is active in p5 mode */
+  canvas#p5-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: none;
+  }
+  /* default p5-active: hide #bg, show #p5-canvas raw */
+  body.p5-active canvas#bg { display: none; }
+  body.p5-active canvas#p5-canvas { display: block; }
+  /* unfold modes: show #bg (which displays the unfolded output), hide raw p5 */
+  body.p5-active.p5-unfold canvas#bg { display: block; }
+  body.p5-active.p5-unfold canvas#p5-canvas {
+    /* keep it laid out so its bitmap stays readable as a texture, just hide visually */
+    display: block;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .code-panel .cp-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .code-panel .cp-close {
+    background: transparent;
+    border: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .code-panel .cp-close:hover { color: var(--ink); }
+  .code-panel .cp-hint {
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.55;
+    color: var(--ink-dim);
+    background: rgba(244,246,250,0.03);
+    border-bottom: 1px solid var(--glass-edge);
+  }
+  .code-panel .cp-hint b { color: var(--ink); font-weight: 500; }
+  .code-panel .cp-hint code {
+    color: #aef;
+    background: rgba(170,238,255,0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .code-panel textarea.cp-code {
+    display: block;
+    width: 100%;
+    min-height: 260px;
+    max-height: 50vh;
+    padding: 12px 14px;
+    background: #07090d;
+    color: #d8e3f0;
+    border: none;
+    outline: none;
+    resize: vertical;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    tab-size: 2;
+  }
+  .code-panel textarea.cp-code::selection { background: rgba(120,170,220,0.35); }
+
+  /* Favorites strip — between hint and textarea */
+  .code-panel .cp-favs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--glass-edge);
+    background: rgba(244,246,250,0.025);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .code-panel .cp-favs::-webkit-scrollbar { display: none; }
+  .code-panel .cp-fav-save {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: rgba(255,220,130,0.10);
+    border: 1px dashed rgba(255,220,130,0.45);
+    border-radius: 16px;
+    color: #ffd984;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .code-panel .cp-fav-save:hover {
+    background: rgba(255,220,130,0.18);
+    border-color: rgba(255,220,130,0.7);
+    border-style: solid;
+  }
+  .code-panel .cp-fav-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .code-panel .cp-fav-empty {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    padding: 0 6px;
+    letter-spacing: 0.06em;
+  }
+  .code-panel .cp-fav-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 4px 8px;
+    background: rgba(244,246,250,0.06);
+    border: 1px solid var(--glass-edge);
+    border-radius: 16px;
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 220px;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .code-panel .cp-fav-chip:hover {
+    background: rgba(170,238,255,0.12);
+    border-color: rgba(170,238,255,0.4);
+    transform: translateY(-1px);
+  }
+  .code-panel .cp-fav-chip.active {
+    background: rgba(170,238,255,0.18);
+    border-color: rgba(170,238,255,0.55);
+    color: #d8f0ff;
+  }
+  .code-panel .cp-fav-chip .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.10em;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(244,246,250,0.08);
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+  .code-panel .cp-fav-chip[data-mode="p5"] .badge { color: #c9a1ff; background: rgba(180,130,255,0.12); }
+  .code-panel .cp-fav-chip[data-mode="glsl"] .badge { color: #aef; background: rgba(170,238,255,0.10); }
+  .code-panel .cp-fav-chip .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+  }
+  .code-panel .cp-fav-chip .del {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 13px;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+  .code-panel .cp-fav-chip .del:hover {
+    background: rgba(255,100,100,0.22);
+    color: #ffb0b0;
+  }
+  .code-panel .cp-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--glass-edge);
+  }
+  .code-panel .cp-status {
+    flex: 1;
+    min-width: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    white-space: pre-wrap;
+    overflow: auto;
+    max-height: 80px;
+  }
+  .code-panel .cp-status.ok    { color: #8fd6a3; }
+  .code-panel .cp-status.err   { color: #ff8a8a; }
+  .code-panel .cp-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .code-panel .cp-btn {
+    padding: 7px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    border-radius: 7px;
+    border: 1px solid var(--glass-edge);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .code-panel .cp-btn:hover { background: rgba(244,246,250,0.08); border-color: var(--glass-edge-bright); }
+  .code-panel .cp-btn.primary {
+    background: rgba(170,238,255,0.14);
+    border-color: rgba(170,238,255,0.35);
+    color: #d8f0ff;
+  }
+  .code-panel .cp-btn.primary:hover { background: rgba(170,238,255,0.22); }
+  body.broadcast .code-panel { opacity: 0; pointer-events: none; }
+
+  /* Broadcast (clean) mode hides chrome and ensures the venue canvas
+     fills the viewport with no letterbox — for OBS Browser Source / Spout
+     window-capture pipelines. When body.broadcast is set, the host
+     should be sized to the venue's aspect ratio (2688:3840) so what's
+     captured is exactly the canvas pixels with nothing else. */
+  body.broadcast .venue-tag,
+  body.broadcast .sys-pill,
+  body.broadcast .info-card,
+  body.broadcast .dock,
+  body.broadcast .face-overlay { opacity: 0; pointer-events: none; }
+  /* In broadcast mode the stage fills the viewport edge-to-edge — no
+     letterbox bars. Aspect mismatches will crop the canvas, but a sender
+     configured with the correct 2688×3840 viewport will see exact pixels. */
+  body.broadcast .stage { background: #000; }
+  /* Hide cursor everywhere in broadcast mode so it can't bleed into capture. */
+  body.broadcast,
+  body.broadcast * ,
+  body.broadcast canvas#bg { cursor: none !important; }
+  body.broadcast .stage-inner {
+    aspect-ratio: auto;
+    height: 100vh;
+    width: 100vw;
+    max-width: 100vw;
+    box-shadow: none;
+  }
+
+  /* Broadcast HUD — only visible in broadcast mode, dismissable. Lets
+     the operator confirm they're in capture mode without leaking into
+     the captured frame (it auto-fades, then hides on user dismiss). */
+  .broadcast-hud {
+    display: none;
+    position: fixed;
+    /* Park the HUD off-screen so it can't bleed into capture. The user
+       can still toggle broadcast via the B key or Esc. */
+    top: -9999px; left: -9999px;
+    transform: none;
+    z-index: 100;
+    padding: 8px 14px;
+    background: rgba(244,40,40,0.88);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    pointer-events: auto;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.5s;
+  }
+  body.broadcast .broadcast-hud { display: block; }
+  body.broadcast .broadcast-hud.faded { opacity: 0.12; }
+  body.broadcast .broadcast-hud.faded:hover { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="stage-inner" id="stage-inner">
+      <canvas id="bg"></canvas>
+      <canvas id="p5-canvas"></canvas>
+      <div class="face-overlay" id="face-overlay"></div>
+    </div>
+  </div>
+
+  <div class="code-panel" id="code-panel" role="dialog" aria-label="Custom shader code">
+    <div class="cp-head">
+      <div class="cp-title">Custom · <span id="cp-mode-label">GLSL</span></div>
+      <div class="cp-mode" id="cp-mode">
+        <button data-mode="glsl" class="active">GLSL</button>
+        <button data-mode="p5">p5.js</button>
+      </div>
+      <button class="cp-close" id="cp-close" title="Close">✕</button>
+    </div>
+    <div class="cp-hint" id="cp-hint-glsl">
+      Write the body of <code>vec3 shaderCustom(vec3 dir)</code>. Must <b>return vec3</b>.<br/>
+      Available: <code>dir</code> (unit vec3 on sphere), <code>u_time</code>, <code>u_mouseDir</code>, <code>u_mouseValid</code>, <code>u_clicks[8]</code>, <code>u_clickCount</code>.<br/>
+      Helpers: <code>fbm3(p)</code>, <code>vnoise3(p)</code>, <code>hash13(p)</code>, <code>hash33(p)</code>, <code>clickRipple(dir, freq, decayR, decaySpeed)</code>, <code>clickRing(dir, speed)</code>, palettes <code>paletteAurora(t)</code>, <code>neonPalette(t)</code>.
+    </div>
+    <div class="cp-hint" id="cp-hint-p5" style="display:none">
+      Write the body of <code>draw()</code> — or paste a full sketch with <code>function setup()</code> and <code>function draw()</code>.<br/>
+      Variables: <code>width</code>, <code>height</code>, <code>frameCount</code>, <code>mouseX</code>, <code>mouseY</code>, <code>millis()</code>, <code>clicks</code> (array of {x,y,t} normalized 0–1).<br/>
+      <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span><b>Venue mapping:</b></span>
+        <div class="cp-mode" id="cp-unfold" style="margin:0;">
+          <button data-unfold="panorama" class="active" title="Treat canvas as 360° equirectangular panorama and unfold onto the 5 cave walls. Requires 2:1 canvas for no distortion.">Panorama</button>
+          <button data-unfold="tile" title="Show full canvas on each face independently — no distortion per face but content is not 3D-continuous.">Tile per face</button>
+          <button data-unfold="raw" title="Stretch canvas directly across the venue cross (no unfold)">Raw</button>
+        </div>
+        <span id="cp-yaw-wrap" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px;">
+          <span>Yaw</span>
+          <input type="range" id="cp-yaw" min="-180" max="180" step="1" value="90" style="width:100px; vertical-align:middle;" />
+          <span id="cp-yaw-val" style="font-family:'JetBrains Mono',monospace; min-width:40px;">+90°</span>
+        </span>
+      </div>
+      <div style="margin-top:6px; color:var(--ink-faint); font-size:9px; line-height:1.6;">
+        <b style="color:var(--ink-dim);">Panorama:</b> Author your sketch as a 2:1 equirectangular panorama (e.g. <code>createCanvas(2048, 1024)</code>). Top of canvas = ceiling, middle row = horizon, bottom = floor. Non-2:1 sketches will distort.
+        <b style="color:var(--ink-dim);"> Yaw</b> rotates the panorama around the room to align your "front" with a specific wall (default +90° matches the Momo CAVE).
+      </div>
+    </div>
+    <div class="cp-favs" id="cp-favs">
+      <button class="cp-fav-save" id="cp-fav-save" title="Save the current editor contents as a named favorite (stored in this browser)">★ Save current…</button>
+      <div class="cp-fav-list" id="cp-fav-list"></div>
+    </div>
+    <textarea class="cp-code" id="cp-code" spellcheck="false"></textarea>
+    <div class="cp-foot">
+      <div class="cp-status" id="cp-status">Ready. Press <b>Apply</b> or ⌘/Ctrl+Enter to compile.</div>
+      <div class="cp-actions">
+        <button class="cp-btn" id="cp-reset">Reset</button>
+        <button class="cp-btn primary" id="cp-apply">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="venue-tag">
+    <div class="name">VENUE · 704</div>
+    <div class="res">2688 × 3840</div>
+    <div class="sub">CAVE · physical-room unfold · seamless</div>
+  </div>
+
+  <div class="sys-pill">
+    <span class="dot"></span>
+    <span id="quality-label">render · ½</span>
+    <span class="sep">/</span>
+    <span id="fps">— fps</span>
+    <span class="sep">/</span>
+    <span>shader · <span id="shader-id">aurora</span></span>
+  </div>
+
+  <div class="info-card" id="info">
+    <div class="eyebrow">Wallpaper <span class="idx">01</span> / <span class="total">02</span></div>
+    <h1 id="info-title">Aurora</h1>
+    <p id="info-desc">Iridescent bands twisted along the mouse axis. Clicks burst color rings expanding across the sphere.</p>
+  </div>
+
+  <div class="dock" id="dock">
+    <div class="sep-vert"></div>
+
+    <div class="pop-wrap" id="quality-wrap">
+      <button class="ico-btn" id="btn-quality" title="Render quality" aria-label="Quality">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <div class="pop-menu" id="quality-menu">
+        <div class="head">Render quality</div>
+        <button data-q="0.25"><span>Low</span><b>672 × 960</b></button>
+        <button data-q="0.5"><span>Medium</span><b>1344 × 1920</b></button>
+        <button data-q="1.0"><span>Full</span><b>2688 × 3840</b></button>
+      </div>
+    </div>
+
+    <button class="ico-btn" id="btn-code" title="Custom shader code" aria-label="Custom shader">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+      </svg>
+    </button>
+
+    <button class="ico-btn" id="btn-broadcast" title="Broadcast / OBS capture mode (press B). Hides UI and removes letterbox so the captured frame is exactly the venue canvas (2688×3840). Right-click = open clean window in new tab for Spout window-capture." aria-label="Broadcast mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="2"/>
+        <path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49"/>
+        <path d="M20.07 4.93a10 10 0 0 1 0 14.14M3.93 19.07a10 10 0 0 1 0-14.14"/>
+      </svg>
+    </button>
+
+    <button class="ico-btn active" id="btn-overlay" title="Toggle face labels" aria-label="Face labels">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+      </svg>
+    </button>
+
+    <div class="pop-wrap" id="entrance-wrap">
+      <button class="ico-btn" id="btn-entrance" title="Entrance background — set a color, image, or shader to fill the doorway tile" aria-label="Entrance background">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="3" width="12" height="18" rx="1"/>
+          <circle cx="15" cy="12" r="0.8" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="pop-menu entrance-menu" id="entrance-menu">
+        <div class="head">Entrance background</div>
+        <div class="ent-modes" id="ent-modes">
+          <button data-mode="none">None</button>
+          <button data-mode="color">Color</button>
+          <button data-mode="image">Image</button>
+          <button data-mode="shader">Shader</button>
+        </div>
+        <div class="ent-body ent-body-none" data-body="none">
+          <div class="ent-hint">Entrance is transparent — the wall right shader shows through.</div>
+        </div>
+        <div class="ent-body ent-body-color" data-body="color" style="display:none">
+          <label class="ent-row">
+            <span>Color</span>
+            <input type="color" id="ent-color" />
+          </label>
+        </div>
+        <div class="ent-body ent-body-image" data-body="image" style="display:none">
+          <label class="ent-row">
+            <span>Image</span>
+            <input type="file" id="ent-image-file" accept="image/*" />
+          </label>
+          <div class="ent-preview-wrap">
+            <img class="ent-preview" id="ent-image-preview" alt="" />
+            <button class="ent-clear" id="ent-image-clear" title="Remove image">Clear</button>
+          </div>
+          <label class="ent-row ent-row-slider">
+            <span>Scale</span>
+            <input type="range" id="ent-image-scale" min="0.1" max="3" step="0.05" value="1" />
+            <input type="number" id="ent-image-scale-val" class="ent-val-input" min="0.1" max="10" step="0.05" value="1" />
+          </label>
+          <label class="ent-row ent-row-slider">
+            <span>Rotate</span>
+            <input type="range" id="ent-image-rot" min="-180" max="180" step="1" value="0" />
+            <input type="number" id="ent-image-rot-val" class="ent-val-input" min="-360" max="360" step="1" value="0" />
+          </label>
+          <button class="ent-reset" id="ent-image-reset" title="Reset scale and rotation">Reset transform</button>
+        </div>
+        <div class="ent-body ent-body-shader" data-body="shader" style="display:none">
+          <label class="ent-row">
+            <span>Shader</span>
+            <select id="ent-shader-pick"></select>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="pop-wrap" id="capture-wrap">
+      <button class="ico-btn" id="btn-capture" title="Export venue PNG" aria-label="Export">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>
+        </svg>
+      </button>
+      <div class="pop-menu" id="capture-menu">
+        <div class="head">Export venue cross</div>
+        <button data-w="2688" data-h="3840"><span>Native</span><b>2688 × 3840</b></button>
+        <button data-w="5376" data-h="7680"><span>2× supersample</span><b>5376 × 7680</b></button>
+        <button data-w="1344" data-h="1920"><span>½ preview</span><b>1344 × 1920</b></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="broadcast-hud" id="broadcast-hud" title="Click to exit broadcast mode (or press B / Esc)">● BROADCAST · 2688×3840 · click to exit</div>
+
+<script id="unfold-fragment-shader" type="x-shader/x-fragment">
+precision highp float;
+uniform float u_yaw_offset; // radians — rotates panorama on sphere
+uniform vec2 u_res;
+uniform sampler2D u_p5tex;
+uniform int u_mode; // 0=panorama (equirectangular), 1=tile per face
+
+// venue cross rectangles (must match the main shader)
+const vec4 R_TOP    = vec4(640.0,    0.0, 1408.0,  640.0);
+const vec4 R_LEFT   = vec4(  0.0,  640.0,  640.0, 2048.0);
+const vec4 R_FLOOR  = vec4(640.0,  640.0, 1408.0, 2048.0);
+const vec4 R_RIGHT  = vec4(2048.0, 640.0,  640.0, 2048.0);
+const vec4 R_BOTTOM = vec4(640.0, 2688.0, 1408.0,  640.0);
+const vec4 R_ENT    = vec4(2048.0, 1920.0, 640.0,  512.0);
+const vec3 ENTRANCE_COL = vec3(0.773, 0.878, 0.910);
+const float ROOM_W = 5.5;
+const float ROOM_D = 8.0;
+const float WALL_H = 2.5;
+const float EYE_H  = 1.6;
+const float PI = 3.14159265359;
+
+bool inRect(vec2 px, vec4 r) {
+  return px.x >= r.x && px.x < r.x + r.z && px.y >= r.y && px.y < r.y + r.w;
+}
+
+void main() {
+  // Same coord remap as main shader so cross layout works at any render scale
+  vec2 px = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y)
+            * vec2(2688.0, 3840.0) / u_res;
+
+  // Entrance is no longer hardcoded — it falls through to the regular face
+  // rendering below (becomes part of Wall Right) so the panorama content
+  // continues unbroken across the doorway. The customizable entrance is
+  // handled in the main shader's mode dispatch when p5 is inactive.
+  // (intentionally no early-return for R_ENT)
+
+  vec3 eye = vec3(0.0, EYE_H, 0.0);
+  vec3 P; vec2 uv = vec2(0.0); bool hit = false;
+  if (inRect(px, R_TOP)) {
+    uv = (px - R_TOP.xy) / R_TOP.zw;
+    P = vec3((uv.x - 0.5) * ROOM_W, (1.0 - uv.y) * WALL_H, +ROOM_D * 0.5);
+    hit = true;
+  } else if (inRect(px, R_LEFT)) {
+    uv = (px - R_LEFT.xy) / R_LEFT.zw;
+    P = vec3(-ROOM_W * 0.5, (1.0 - uv.x) * WALL_H, (0.5 - uv.y) * ROOM_D);
+    hit = true;
+  } else if (inRect(px, R_FLOOR)) {
+    uv = (px - R_FLOOR.xy) / R_FLOOR.zw;
+    P = vec3((uv.x - 0.5) * ROOM_W, 0.0, (0.5 - uv.y) * ROOM_D);
+    hit = true;
+  } else if (inRect(px, R_RIGHT)) {
+    uv = (px - R_RIGHT.xy) / R_RIGHT.zw;
+    P = vec3(+ROOM_W * 0.5, uv.x * WALL_H, (0.5 - uv.y) * ROOM_D);
+    hit = true;
+  } else if (inRect(px, R_BOTTOM)) {
+    uv = (px - R_BOTTOM.xy) / R_BOTTOM.zw;
+    P = vec3((uv.x - 0.5) * ROOM_W, uv.y * WALL_H, -ROOM_D * 0.5);
+    hit = true;
+  }
+  if (!hit) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+
+  vec2 tuv;
+  if (u_mode == 1) {
+    // Tile: each face shows the full texture, in face-uv coords.
+    tuv = uv;
+  } else {
+    // Panorama: equirectangular sampling using the room-model direction.
+    // Convention matches the 360→cubemap Python tool: +Z = forward wall
+    // (top panel of venue cross), longitude wraps via yaw_offset so the
+    // user can rotate the panorama to align with their physical venue.
+    vec3 dir = normalize(P - eye);
+    float lon = atan(dir.z, dir.x) + u_yaw_offset;
+    float lat = asin(clamp(dir.y, -1.0, 1.0));
+    // fract() handles the longitude seam — combined with REPEAT wrap on S
+    // (set in JS when source is POT 2:1) this gives a seamless wrap.
+    tuv = vec2(fract((lon + PI) / (2.0 * PI)), 1.0 - (lat + PI * 0.5) / PI);
+  }
+  gl_FragColor = vec4(texture2D(u_p5tex, tuv).rgb, 1.0);
+}
+</script>
+
+<script id="unfold-vertex-shader" type="x-shader/x-vertex">
+attribute vec2 a_pos;
+void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+</script>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec2 a_pos;
+void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision highp float;
+
+uniform vec2  u_res;          // canvas pixel size (matches venue 2688x3840 aspect)
+uniform float u_time;
+uniform vec3  u_mouseDir;     // mouse projected to sphere direction (unit)
+uniform float u_mouseValid;   // 1 if mouse is over a face, 0 otherwise
+uniform vec4  u_clicks[8];    // xyz = dir, w = spawn time
+uniform int   u_clickCount;
+uniform int   u_shaderId;     // 0..4
+uniform float u_showSlices;   // unused now (overlay is HTML)
+// Entrance background controls — lets the user replace the doorway tile
+// with a flat color, an uploaded image, a sampled shader, or nothing
+// (mode=0 falls back to the Wall Right shader behind it).
+uniform int       u_entranceMode;     // 0=none, 1=color, 2=image, 3=shader
+uniform vec3      u_entranceColor;
+uniform sampler2D u_entranceTex;
+uniform int       u_entranceShaderId; // 0=aurora, 1=custom, 2=entrance custom
+uniform float     u_entranceImageScale;  // 1.0 = contain-fit image, >1 zooms in
+uniform float     u_entranceImageRot;    // radians, image rotated around its center
+uniform float     u_entranceImageAspect; // image width / height
+
+// ----- venue cross layout (in 2688x3840 canvas pixel space, Y down from top) -----
+// rect = (x, y, w, h)
+const vec4 R_TOP    = vec4(640.0,    0.0, 1408.0,  640.0);
+const vec4 R_LEFT   = vec4(  0.0,  640.0,  640.0, 2048.0);
+const vec4 R_FLOOR  = vec4(640.0,  640.0, 1408.0, 2048.0);
+const vec4 R_RIGHT  = vec4(2048.0, 640.0,  640.0, 2048.0);
+const vec4 R_BOTTOM = vec4(640.0, 2688.0, 1408.0,  640.0);
+const vec4 R_ENT    = vec4(2048.0, 1920.0, 640.0,  512.0);
+
+// Entrance fill (cool ice blue from spec example)
+const vec3 ENTRANCE_COL = vec3(0.773, 0.878, 0.910);
+
+// ----- physical room model (meters) -----
+// We sample the sphere using the eye-to-surface ray of the *actual* 704 venue
+// geometry, instead of per-face rectilinear projections. This is what makes
+// the cross truly seamless: adjacent cross faces share their physical edge
+// in the room (wall-meets-floor corners, etc.), so the boundary pixels
+// resolve to *identical* direction vectors on the sphere.
+//
+// Aspect must match face proportions so pixel density stays uniform:
+//   ROOM_W / ROOM_D  == 1408/2048 = 0.6875
+//   WALL_H / ROOM_W  ==  640/1408 = 0.4545
+//   WALL_H / ROOM_D  ==  640/2048 = 0.3125
+const float ROOM_W = 5.5;
+const float ROOM_D = 8.0;
+const float WALL_H = 2.5;
+const float EYE_H  = 1.6;
+
+// ============= hashes / noise (3D for spherical seamlessness) =============
+float hash13(vec3 p) {
+  p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+vec3 hash33(vec3 p) {
+  p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
+           dot(p, vec3(269.5, 183.3, 246.1)),
+           dot(p, vec3(113.5, 271.9, 124.6)));
+  return fract(sin(p) * 43758.5453);
+}
+float vnoise3(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash13(i),                     hash13(i + vec3(1,0,0)), u.x),
+        mix(hash13(i + vec3(0,1,0)),       hash13(i + vec3(1,1,0)), u.x), u.y),
+    mix(mix(hash13(i + vec3(0,0,1)),       hash13(i + vec3(1,0,1)), u.x),
+        mix(hash13(i + vec3(0,1,1)),       hash13(i + vec3(1,1,1)), u.x), u.y),
+    u.z);
+}
+float fbm3(vec3 p) {
+  // 3 octaves (was 5). 3 keeps the low-freq shape that matters visually
+  // and cuts ~40% of the per-pixel noise work — biggest single perf win.
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 3; i++) { v += a * vnoise3(p); p *= 2.03; a *= 0.5; }
+  return v;
+}
+
+// ============= face → direction =============
+// Physical-room model: each cross pixel maps to a 3D point on the
+// corresponding wall/floor surface; direction = normalize(P - eye).
+// (See ROOM_W/ROOM_D/WALL_H constants above.) The legacy rectilinear
+// faceToDir() is kept below in case we want to A/B compare.
+bool inRect(vec2 px, vec4 r) {
+  return px.x >= r.x && px.x < r.x + r.z && px.y >= r.y && px.y < r.y + r.w;
+}
+
+vec3 faceToDir(vec2 uv01, float yawDeg, float pitchDeg, float hfovDeg, float vfovDeg) {
+  float tx = (uv01.x * 2.0 - 1.0) * tan(radians(hfovDeg * 0.5));
+  float ty = (1.0 - uv01.y * 2.0) * tan(radians(vfovDeg * 0.5));
+  vec3 d = normalize(vec3(tx, ty, -1.0));
+  float p = radians(pitchDeg);
+  d = vec3(d.x, cos(p) * d.y - sin(p) * d.z, sin(p) * d.y + cos(p) * d.z);
+  float y = radians(yawDeg);
+  d = vec3(cos(y) * d.x + sin(y) * d.z, d.y, -sin(y) * d.x + cos(y) * d.z);
+  return d;
+}
+
+// ============= shared click ripple helper =============
+// returns the wave envelope at the given dir; loops over up to 8 clicks.
+// freq, decayRadius, decaySpeed parameters tune the look.
+float clickRipple(vec3 dir, float freq, float decayRadius, float decaySpeed) {
+  float ripple = 0.0;
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_clickCount) break;
+    vec4 c = u_clicks[i];
+    float cd = acos(clamp(dot(dir, c.xyz), -1.0, 1.0)); // angular dist on sphere
+    float age = u_time - c.w;
+    if (age >= 0.0 && age < 4.0) {
+      ripple += sin(cd * freq - age * decaySpeed) * exp(-cd * decayRadius - age * 1.0);
+    }
+  }
+  return ripple;
+}
+
+// returns vec2(ringStrength, traveling-radius age signal) — used by Vortex, Aurora.
+float clickRing(vec3 dir, float speed) {
+  float ring = 0.0;
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_clickCount) break;
+    vec4 c = u_clicks[i];
+    float cd = acos(clamp(dot(dir, c.xyz), -1.0, 1.0));
+    float age = u_time - c.w;
+    if (age >= 0.0 && age < 3.0) {
+      float r = age * speed;
+      ring += exp(-pow((cd - r) * 8.0, 2.0)) * (1.0 - age * 0.33);
+    }
+  }
+  return ring;
+}
+
+// =====================================================================
+// SHADERS — each takes a unit direction on the sphere, returns RGB.
+// All are continuous on S² so the venue cross has no visible seams
+// across face boundaries.
+// =====================================================================
+
+// ---------- 1. AURORA — iridescent bands ----------
+vec3 paletteAurora(float t) {
+  vec3 a = vec3(0.5, 0.4, 0.5);
+  vec3 b = vec3(0.5, 0.5, 0.5);
+  vec3 c = vec3(1.0, 1.0, 1.0);
+  vec3 d = vec3(0.00, 0.20, 0.55);
+  return a + b * cos(6.2831 * (c * t + d));
+}
+vec3 shaderAurora(vec3 dir) {
+  // Rotate direction by mouse-defined "flow direction"
+  // Build a rotation that twists around the sphere along the mouse direction.
+  vec3 axis = normalize(u_mouseDir + vec3(0.001));
+  float ang = u_time * 0.12 + length(u_mouseDir.xz) * 0.5 * u_mouseValid;
+  // Rodrigues' rotation
+  float ca = cos(ang), sa = sin(ang);
+  vec3 p = dir * ca + cross(axis, dir) * sa + axis * dot(axis, dir) * (1.0 - ca);
+
+  // Layered bands from spherical harmonics-ish patterns
+  float n = 0.0;
+  for (int i = 1; i <= 5; i++) {
+    float fi = float(i);
+    n += sin(p.x * fi * 1.8 + u_time * 0.4
+             + sin(p.y * fi * 1.3 + u_time * 0.25) * 1.5
+             + sin(p.z * fi * 1.1 + u_time * 0.18) * 1.2) / fi;
+  }
+  float burst = clickRing(dir, 1.0);
+  vec3 burstCol = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_clickCount) break;
+    vec4 c = u_clicks[i];
+    float cd = acos(clamp(dot(dir, c.xyz), -1.0, 1.0));
+    float age = u_time - c.w;
+    if (age >= 0.0 && age < 3.0) {
+      float r = age * 1.0;
+      float ring = exp(-pow((cd - r) * 8.0, 2.0)) * (1.0 - age * 0.33);
+      burstCol += paletteAurora(c.w * 0.3) * ring * 1.2;
+    }
+  }
+  n += burst * 1.4;
+
+  float t = 0.5 + 0.5 * n + 0.05 * dir.y;
+  vec3 col = paletteAurora(t + u_time * 0.02);
+
+  // Retuned for 3-octave amplitudes (n peaks lower than with 5 octaves).
+  float bright = smoothstep(0.0, 0.7, abs(n));
+  col *= 0.5 + 1.1 * bright;
+  col += burstCol;
+
+  // mouse proximity glow
+  float md = acos(clamp(dot(dir, u_mouseDir), -1.0, 1.0));
+  col += exp(-md * 3.0) * 0.22 * paletteAurora(u_time * 0.1) * u_mouseValid;
+
+  vec3 bg = vec3(0.03, 0.02, 0.07);
+  col = mix(bg, col, smoothstep(0.0, 0.30, bright + burst));
+  col += 0.04;
+  return col;
+}
+
+// =====================================================================
+// MAIN — venue cross compositor.
+// =====================================================================
+
+vec3 sampleShader(vec3 dir) {
+  if (u_shaderId == 0) return shaderAurora(dir);
+  return vec3(0.0);
+}
+
+void main() {
+  // gl_FragCoord origin = bottom-left of canvas. Rescale to venue (2688×3840)
+  // pixel space with origin top-left, so the hardcoded R_* rects are valid at
+  // any render quality (e.g. 1344×1920 at ½ quality still resolves to the
+  // full 2688×3840 layout).
+  vec2 px = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y)
+            * vec2(2688.0, 3840.0) / u_res;
+
+  // Entrance overlay first. If mode is "none", we DON'T return here — the
+  // pixel falls through to the regular wall-right rendering below so the
+  // doorway tile becomes part of that wall. Otherwise we paint it with the
+  // user-chosen color / image / shader.
+  if (inRect(px, R_ENT) && u_entranceMode != 0) {
+    vec2 euv = (px - R_ENT.xy) / R_ENT.zw;
+    if (u_entranceMode == 1) {
+      gl_FragColor = vec4(u_entranceColor, 1.0);
+      return;
+    }
+    if (u_entranceMode == 2) {
+      // Map the entrance rect to a centered unit-square, aspect-correct the
+      // image so it isn't stretched, then apply rotation + zoom around the
+      // rect center. If the resulting sample point falls outside the image,
+      // we render the surrounding wall right shader at that pixel so the
+      // image "floats" on top of the wallpaper.
+      vec2 uv = euv - 0.5;                          // [-0.5, 0.5] centered
+      float rectAspect = R_ENT.z / R_ENT.w;          // 640/512 = 1.25
+      // Contain-fit: scale UV axes so a unit-square image covers as much of
+      // the rect as possible without distortion. The 1.0 axis fills, the
+      // other axis maps to <1.0 (image edges visible inside the rect).
+      vec2 fit = (u_entranceImageAspect > rectAspect)
+        ? vec2(1.0, rectAspect / u_entranceImageAspect)
+        : vec2(u_entranceImageAspect / rectAspect, 1.0);
+      uv = uv / fit;
+      // Rotate
+      float c = cos(u_entranceImageRot), s = sin(u_entranceImageRot);
+      uv = mat2(c, -s, s, c) * uv;
+      // Scale (user zoom). Divide because scale=2 = "image 2× bigger" = sample a
+      // smaller window of the image (uv compressed toward center).
+      uv = uv / max(u_entranceImageScale, 0.001);
+      // Back to [0,1] sample space
+      uv += 0.5;
+      if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        // Outside the image — render the surrounding wall right shader here
+        vec3 eye2 = vec3(0.0, EYE_H, 0.0);
+        vec2 ruv = (px - R_RIGHT.xy) / R_RIGHT.zw;
+        vec3 Pr = vec3(+ROOM_W * 0.5, ruv.x * WALL_H, (0.5 - ruv.y) * ROOM_D);
+        vec3 ed = normalize(Pr - eye2);
+        gl_FragColor = vec4(sampleShader(ed), 1.0);
+      } else {
+        // Flip Y so canvas-top maps to image-top
+        gl_FragColor = vec4(texture2D(u_entranceTex, vec2(uv.x, 1.0 - uv.y)).rgb, 1.0);
+      }
+      return;
+    }
+    if (u_entranceMode == 3) {
+      // Render the chosen built-in shader as if this tile were a window
+      // onto the wall right surface (uses wall right's physical-room map).
+      vec3 eye2 = vec3(0.0, EYE_H, 0.0);
+      vec2 ruv = (px - R_RIGHT.xy) / R_RIGHT.zw;
+      vec3 Pr = vec3(+ROOM_W * 0.5, ruv.x * WALL_H, (0.5 - ruv.y) * ROOM_D);
+      vec3 ed = normalize(Pr - eye2);
+      vec3 ecol;
+      if (u_entranceShaderId == 0)      ecol = shaderAurora(ed);
+      else if (u_entranceShaderId == 1) ecol = shaderCustom(ed);
+      else                              ecol = shaderEntrance(ed);
+      gl_FragColor = vec4(ecol, 1.0);
+      return;
+    }
+  }
+
+  // CAVE physical-room model: each face maps to a point on its actual
+  // wall/floor surface, and direction = normalize(P - eye). Because adjacent
+  // cross faces share their physical edge in the room, this is automatically
+  // seamless at every boundary — the boundary pixels of two adjacent faces
+  // resolve to *exactly* the same point in 3D space.
+  vec3 eye = vec3(0.0, EYE_H, 0.0);
+  vec3 P;
+  vec2 uv = vec2(0.0);
+  bool hit = false;
+  if (inRect(px, R_TOP)) {
+    uv = (px - R_TOP.xy) / R_TOP.zw;
+    P = vec3((uv.x - 0.5) * ROOM_W, (1.0 - uv.y) * WALL_H, +ROOM_D * 0.5);
+    hit = true;
+  } else if (inRect(px, R_LEFT)) {
+    uv = (px - R_LEFT.xy) / R_LEFT.zw;
+    P = vec3(-ROOM_W * 0.5, (1.0 - uv.x) * WALL_H, (0.5 - uv.y) * ROOM_D);
+    hit = true;
+  } else if (inRect(px, R_FLOOR)) {
+    uv = (px - R_FLOOR.xy) / R_FLOOR.zw;
+    P = vec3((uv.x - 0.5) * ROOM_W, 0.0, (0.5 - uv.y) * ROOM_D);
+    hit = true;
+  } else if (inRect(px, R_RIGHT)) {
+    uv = (px - R_RIGHT.xy) / R_RIGHT.zw;
+    P = vec3(+ROOM_W * 0.5, uv.x * WALL_H, (0.5 - uv.y) * ROOM_D);
+    hit = true;
+  } else if (inRect(px, R_BOTTOM)) {
+    uv = (px - R_BOTTOM.xy) / R_BOTTOM.zw;
+    P = vec3((uv.x - 0.5) * ROOM_W, uv.y * WALL_H, -ROOM_D * 0.5);
+    hit = true;
+  } else {
+    P = vec3(0.0);
+  }
+  vec3 dir;
+  if (hit) dir = normalize(P - eye);
+
+  if (!hit) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  vec3 col = sampleShader(dir);
+
+  // Subtle face vignette to make boundaries softer (purely cosmetic; doesn't break seam)
+  float vig = smoothstep(0.0, 0.5, min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y)));
+  col *= mix(0.92, 1.0, vig);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(function() {
+  'use strict';
+
+  // ---------- venue layout in canvas (2688x3840) pixel space ----------
+  const VENUE_W = 2688, VENUE_H = 3840;
+  // Mirror the GLSL layout. Direction is now computed from the physical-room
+  // model in faceUVToDir(), so the orientation metadata is descriptive only.
+  const FACES = [
+    { key: 'top',      label: 'Wall Top',    x:  640, y:    0, w: 1408, h:  640, where: '+Z wall (front)' },
+    { key: 'left',     label: 'Wall Left',   x:    0, y:  640, w:  640, h: 2048, where: '−X wall (left)' },
+    { key: 'floor',    label: 'Floor',       x:  640, y:  640, w: 1408, h: 2048, where: 'floor (y=0)' },
+    { key: 'right',    label: 'Wall Right',  x: 2048, y:  640, w:  640, h: 2048, where: '+X wall (right)' },
+    { key: 'bottom',   label: 'Wall Bottom', x:  640, y: 2688, w: 1408, h:  640, where: '−Z wall (back)' },
+    { key: 'entrance', label: 'Entrance',    x: 2048, y: 1920, w:  640, h:  512, entrance: true },
+  ];
+
+  // ---------- shader catalog (for UI; the GLSL knows them by index) ----------
+  const SHADERS = [
+    { id: 'aurora',   name: 'Aurora',   desc: 'Iridescent bands twisted along the mouse axis. Clicks burst color rings expanding across the sphere.' },
+    { id: 'custom',   name: 'Custom',   desc: 'Your own code — write GLSL (shaderCustom) or p5.js (draw) in the code panel and hit Apply.' },
+  ];
+  // Index of the Custom shader in SHADERS (used by GLSL dispatch + JS UI hooks).
+  const CUSTOM_IDX = 1;
+
+  // ---------- WebGL setup ----------
+  const canvas = document.getElementById('bg');
+  const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+  if (!gl) { document.body.innerHTML = '<div style="padding:40px">WebGL not available.</div>'; return; }
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh);
+      console.error('Shader compile error:', log);
+      gl.deleteShader(sh);
+      return { error: log };
+    }
+    return { shader: sh };
+  }
+  // ---------- fragment source builder (so we can re-compile with user code) ----------
+  const BASE_FS = document.getElementById('fragment-shader').textContent;
+  const DEFAULT_CUSTOM_BODY =
+`// Spherical "warped noise" demo — replace freely.
+// Tip: try changing the multipliers, palette, or time scales.
+vec3 p = dir;
+float n = fbm3(p * 2.2 + u_time * 0.10);
+float m = fbm3(p * 3.5 - u_time * 0.06 + vec3(n));
+
+// Click ripples on the sphere
+float r = clickRipple(dir, 28.0, 2.0, 8.0);
+
+// Mouse halo
+float md = acos(clamp(dot(dir, u_mouseDir), -1.0, 1.0));
+float glow = exp(-md * 3.0) * u_mouseValid;
+
+vec3 a = vec3(0.05, 0.08, 0.18);
+vec3 b = vec3(0.85, 0.45, 0.95);
+vec3 c = vec3(0.40, 0.95, 0.95);
+vec3 col = mix(a, b, smoothstep(0.30, 0.75, n));
+col = mix(col, c, smoothstep(0.55, 0.95, m));
+col += r * vec3(0.9, 0.7, 1.0);
+col += glow * vec3(0.6, 0.9, 1.1) * 0.6;
+return col;
+`;
+
+  const DEFAULT_P5_BODY =
+`// EQUIRECTANGULAR PANORAMA — designed for venue unfold.
+// Canvas is 2:1 (2048×1024 = standard equirect). Horizontal axis = 360° longitude,
+// vertical axis = 180° latitude. Top = ceiling, middle = horizon, bottom = floor.
+// When unfolded onto the CAVE, this creates a seamless 3D environment.
+function setup() {
+  createCanvas(2048, 1024);
+  pixelDensity(1);
+}
+function draw() {
+  // Horizon gradient sky → floor
+  noStroke();
+  for (let y = 0; y < height; y += 4) {
+    const t = y / height;
+    const r = lerp(20, 5, t);
+    const g = lerp(40, 8, t);
+    const b = lerp(80, 20, t);
+    fill(r, g, b);
+    rect(0, y, width, 4);
+  }
+  // Sun/moon
+  const sx = (millis() * 0.00005 % 1) * width;
+  fill(255, 240, 200, 220);
+  circle(sx, height * 0.35, 90);
+
+  // Longitude grid (every 30°)
+  stroke(255, 255, 255, 60);
+  strokeWeight(2);
+  for (let lon = 0; lon < 360; lon += 30) {
+    const x = (lon / 360) * width;
+    line(x, 0, x, height);
+  }
+  // Latitude grid (every 30°)
+  for (let lat = -75; lat <= 75; lat += 15) {
+    const y = (1 - (lat + 90) / 180) * height;
+    line(0, y, width, y);
+  }
+  // Horizon
+  stroke(255, 200, 100, 200);
+  strokeWeight(4);
+  line(0, height / 2, width, height / 2);
+
+  // Cardinal direction labels at horizon
+  noStroke();
+  fill(255);
+  textSize(64);
+  textAlign(CENTER, CENTER);
+  // After yaw_offset=+90: N(north/forward)=Wall Top in venue
+  text('N', width * 0.50, height * 0.50);
+  text('E', width * 0.75, height * 0.50);
+  text('S', width * 0.00, height * 0.50);
+  text('S', width * 1.00, height * 0.50);
+  text('W', width * 0.25, height * 0.50);
+
+  // Click ripples (use clicks array — normalized 0-1)
+  noFill();
+  strokeWeight(6);
+  for (const c of clicks) {
+    const age = (millis() / 1000) - c.t;
+    if (age < 0 || age > 2.5) continue;
+    stroke(255, 220, 80, 220 * (1 - age / 2.5));
+    circle(c.x * width, c.y * height, age * 600);
+  }
+}
+`;
+
+  // Inject shaderCustom + shaderEntrance + extend the sampleShader dispatch
+  // for u_shaderId == 1 (Custom). shaderEntrance is a SECOND user-defined
+  // GLSL function used only by the entrance background "shader" mode —
+  // independent of shaderCustom so picking a favorite for the entrance
+  // doesn't change the main wallpaper.
+  const NOOP_ENTRANCE_BODY = 'return vec3(0.0);';
+  function buildFragmentSrc(customBody, entranceBody) {
+    const ebody = entranceBody || NOOP_ENTRANCE_BODY;
+    const customFn   = '\nvec3 shaderCustom(vec3 dir) {\n'   + customBody + '\n}\n';
+    const entranceFn = '\nvec3 shaderEntrance(vec3 dir) {\n' + ebody      + '\n}\n';
+    let src = BASE_FS.replace(
+      /vec3 sampleShader\(vec3 dir\) \{/,
+      customFn + entranceFn + '\nvec3 sampleShader(vec3 dir) {'
+    );
+    // Add the id==1 dispatch line right before the final fallback.
+    src = src.replace(
+      /(if \(u_shaderId == 0\) return shaderAurora\(dir\);)/,
+      '$1\n  if (u_shaderId == 1) return shaderCustom(dir);'
+    );
+    return src;
+  }
+
+  function buildProgram(customBody, entranceBody) {
+    const vsRes = compile(gl.VERTEX_SHADER, document.getElementById('vertex-shader').textContent);
+    if (vsRes.error) return { error: vsRes.error };
+    const fsRes = compile(gl.FRAGMENT_SHADER, buildFragmentSrc(customBody, entranceBody));
+    if (fsRes.error) { gl.deleteShader(vsRes.shader); return { error: fsRes.error }; }
+    const p = gl.createProgram();
+    gl.attachShader(p, vsRes.shader);
+    gl.attachShader(p, fsRes.shader);
+    gl.bindAttribLocation(p, 0, 'a_pos');
+    gl.linkProgram(p);
+    gl.deleteShader(vsRes.shader);
+    gl.deleteShader(fsRes.shader);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(p);
+      gl.deleteProgram(p);
+      return { error: log };
+    }
+    return { program: p };
+  }
+
+  function uniformsFor(p) {
+    return {
+      res:        gl.getUniformLocation(p, 'u_res'),
+      time:       gl.getUniformLocation(p, 'u_time'),
+      mouseDir:   gl.getUniformLocation(p, 'u_mouseDir'),
+      mouseValid: gl.getUniformLocation(p, 'u_mouseValid'),
+      clicks:     gl.getUniformLocation(p, 'u_clicks'),
+      clickCount: gl.getUniformLocation(p, 'u_clickCount'),
+      shaderId:   gl.getUniformLocation(p, 'u_shaderId'),
+      entMode:     gl.getUniformLocation(p, 'u_entranceMode'),
+      entColor:    gl.getUniformLocation(p, 'u_entranceColor'),
+      entTex:      gl.getUniformLocation(p, 'u_entranceTex'),
+      entShaderId: gl.getUniformLocation(p, 'u_entranceShaderId'),
+      entImgScale: gl.getUniformLocation(p, 'u_entranceImageScale'),
+      entImgRot:   gl.getUniformLocation(p, 'u_entranceImageRot'),
+      entImgAspect:gl.getUniformLocation(p, 'u_entranceImageAspect'),
+    };
+  }
+
+  // Initial program with the default custom body
+  let prog;
+  let U;
+  {
+    const r = buildProgram(DEFAULT_CUSTOM_BODY);
+    if (r.error) {
+      console.error('Initial link error:', r.error);
+      return;
+    }
+    prog = r.program;
+    U = uniformsFor(prog);
+    gl.useProgram(prog);
+  }
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  // ---------- entrance image texture ----------
+  // 1×1 placeholder so the sampler is always valid even before an image is loaded.
+  const entranceTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, entranceTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+    new Uint8Array([0, 0, 0, 255]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.activeTexture(gl.TEXTURE0);
+
+  // Upload an HTMLImageElement (or canvas) into entranceTex.
+  function uploadEntranceImage(img) {
+    if (!img || !img.width || !img.height) return false;
+    // Record aspect BEFORE downsizing (downsize preserves aspect anyway, but
+    // we want the natural ratio for shader sampling math).
+    if (state && state.entrance) {
+      state.entrance.imageAspect = img.width / img.height;
+    }
+    // Cap the texture size — most user uploads are huge and we don't need that
+    // for a 640×512 doorway. 1024 max keeps GPU memory reasonable.
+    const max = 1024;
+    let w = img.width, h = img.height;
+    if (w > max || h > max) {
+      const s = max / Math.max(w, h);
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      tmp.getContext('2d').drawImage(img, 0, 0, w, h);
+      img = tmp;
+    }
+    try {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, entranceTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.activeTexture(gl.TEXTURE0);
+      return true;
+    } catch (e) {
+      console.warn('entrance image upload failed:', e);
+      return false;
+    }
+  }
+
+  // (Persisted entrance image is loaded after state is declared below.)
+
+  function modeToInt(mode) {
+    return mode === 'color' ? 1 :
+           mode === 'image' ? 2 :
+           mode === 'shader' ? 3 : 0;
+  }
+  function hexToRGB(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!m) return [1, 1, 1];
+    return [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255];
+  }
+  function entranceShaderIdToInt(id) {
+    return id === 'custom' ? 1 :
+           id === 'fav'    ? 2 : 0;
+  }
+  // Set entrance uniforms on the supplied uniform set + ensure entranceTex
+  // is bound on texture unit 1 (so u_entranceTex resolves correctly).
+  function setEntranceUniforms(uSet, ent) {
+    if (!uSet || !uSet.entMode) return;
+    gl.uniform1i(uSet.entMode, modeToInt(ent.mode));
+    const rgb = hexToRGB(ent.color);
+    if (uSet.entColor) gl.uniform3f(uSet.entColor, rgb[0], rgb[1], rgb[2]);
+    if (uSet.entShaderId) gl.uniform1i(uSet.entShaderId, entranceShaderIdToInt(ent.shaderId));
+    if (uSet.entImgScale)  gl.uniform1f(uSet.entImgScale,  ent.imageScale || 1.0);
+    if (uSet.entImgRot)    gl.uniform1f(uSet.entImgRot,    (ent.imageRot || 0) * Math.PI / 180);
+    if (uSet.entImgAspect) gl.uniform1f(uSet.entImgAspect, ent.imageAspect || 1.0);
+    if (uSet.entTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, entranceTex);
+      gl.uniform1i(uSet.entTex, 1);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+  }
+
+  function saveEntranceState() {
+    try {
+      // Exclude _cachedImg (HTMLImageElement isn't serializable)
+      const { _cachedImg, ...persistable } = state.entrance;
+      localStorage.setItem('shaderWallpapers.venue.entrance.v1', JSON.stringify(persistable));
+    } catch (e) { /* over quota? ignore */ }
+  }
+
+  // Rebuild the main program to swap in a new shaderEntrance body (used when
+  // the user picks a GLSL favorite for the entrance background). Uses the
+  // current state.customBody for the main wallpaper.
+  function recompileMainWithEntrance() {
+    const entBody = (state.entrance.shaderId === 'fav') ? state.entrance.shaderBody : '';
+    const r = buildProgram(state.customBody, entBody);
+    if (r.error) {
+      console.warn('Entrance shader compile failed:', r.error);
+      if (typeof setStatus === 'function') {
+        setStatus('Entrance shader compile failed:\n' + r.error, 'err');
+      }
+      return false;
+    }
+    const oldProg = prog;
+    prog = r.program;
+    U = uniformsFor(prog);
+    gl.useProgram(prog);
+    if (oldProg) gl.deleteProgram(oldProg);
+    return true;
+  }
+
+  // ---------- p5 unfold pass (samples a p5 canvas onto the venue cross) ----------
+  let unfoldProg = null;
+  let unfoldU = null;
+  let p5Tex = null;
+  {
+    const uvs = compile(gl.VERTEX_SHADER,   document.getElementById('unfold-vertex-shader').textContent);
+    const ufs = compile(gl.FRAGMENT_SHADER, document.getElementById('unfold-fragment-shader').textContent);
+    if (!uvs.error && !ufs.error) {
+      const p = gl.createProgram();
+      gl.attachShader(p, uvs.shader);
+      gl.attachShader(p, ufs.shader);
+      gl.bindAttribLocation(p, 0, 'a_pos');
+      gl.linkProgram(p);
+      gl.deleteShader(uvs.shader);
+      gl.deleteShader(ufs.shader);
+      if (gl.getProgramParameter(p, gl.LINK_STATUS)) {
+        unfoldProg = p;
+        unfoldU = {
+          res:  gl.getUniformLocation(p, 'u_res'),
+          tex:  gl.getUniformLocation(p, 'u_p5tex'),
+          mode: gl.getUniformLocation(p, 'u_mode'),
+          yawOffset: gl.getUniformLocation(p, 'u_yaw_offset'),
+        };
+        p5Tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, p5Tex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        // CLAMP_TO_EDGE on both axes — WebGL1 forbids REPEAT on non-POT
+        // textures, and most p5 canvases are NPOT (e.g. 800×800). Using
+        // REPEAT made the texture "incomplete" and the whole pass rendered
+        // black. CLAMP is correct for the venue cross sampling.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      } else {
+        console.warn('unfold link error:', gl.getProgramInfoLog(p));
+      }
+    } else {
+      console.warn('unfold compile error:', uvs.error || ufs.error);
+    }
+    // restore main program
+    gl.useProgram(prog);
+  }
+
+  function renderP5Unfold() {
+    if (!unfoldProg || !p5Tex) return false;
+    if (!p5SnapDirty || !p5Snap.width || !p5Snap.height) return false;
+    gl.useProgram(unfoldProg);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, p5Tex);
+    // Wrap mode depends on unfold mode. Panorama needs REPEAT on S so the
+    // longitude seam (-X wall) is seamless; this is safe because in
+    // panorama mode we snapshot to POT 2:1 (see snapshotP5).
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,
+      state.p5Unfold === 'panorama' ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // 2D canvas is naturally y-down; we flip so UV.y=0 == top of canvas.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    try {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, p5Snap);
+    } catch (e) {
+      return false;
+    }
+    gl.uniform2f(unfoldU.res, canvas.width, canvas.height);
+    gl.uniform1i(unfoldU.tex, 0);
+    gl.uniform1i(unfoldU.mode, state.p5Unfold === 'tile' ? 1 : 0);
+    if (unfoldU.yawOffset) {
+      gl.uniform1f(unfoldU.yawOffset, (state.p5YawOffset || 0) * Math.PI / 180);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.useProgram(prog);
+    return true;
+  }
+
+  // ---------- state ----------
+  const state = {
+    activeIdx: 0,
+    quality: 0.25,            // ¼ by default (was ½) — big perf jump for live preview
+    fpsCap: 30,               // cap to 30fps; capture path is unaffected
+    lastFrameT: 0,
+    mouseDir: [0, 0, -1],
+    mouseDirSmoothed: [0, 0, -1],
+    mouseValid: 0,
+    clicks: [],
+    startTime: performance.now() / 1000,
+    customBody: DEFAULT_CUSTOM_BODY,
+    p5Body: DEFAULT_P5_BODY,
+    customMode: 'glsl',   // 'glsl' or 'p5'
+    p5Unfold: 'panorama', // 'panorama' | 'tile' | 'raw' — how p5 maps to the venue cross
+    p5YawOffset: 90,      // degrees — rotates panorama on the sphere (matches CAVE default)
+    // Entrance background — 'none' shows the wall right through (no fill).
+    entrance: {
+      mode: 'none',       // 'none' | 'color' | 'image' | 'shader'
+      color: '#c4e0e8',
+      imageDataUrl: null,
+      // Image transform controls (only used in 'image' mode).
+      imageScale:  1.0,   // 0.1 .. 3.0
+      imageRot:    0,     // degrees (-180..180)
+      imageAspect: 1.0,   // computed from loaded image; persisted so reload works pre-load
+      shaderId: 'aurora', // 'aurora' | 'custom' | 'fav'
+      // Only used when shaderId === 'fav' — body of the GLSL favorite picked.
+      // Stored independently of the favorites list so the entrance keeps
+      // working even if the original favorite is renamed or deleted.
+      shaderBody: '',
+      shaderName: '',     // user-facing label for the picked favorite
+      shaderFavId: null,  // id of the favorite (or null)
+    },
+  };
+  // Restore persisted entrance from localStorage
+  try {
+    const raw = localStorage.getItem('shaderWallpapers.venue.entrance.v1');
+    if (raw) {
+      const e = JSON.parse(raw);
+      Object.assign(state.entrance, e);
+    }
+  } catch (e) { /* ignore */ }
+  // Load the persisted image (if any) — keeps the user's pick across reloads.
+  if (state.entrance.imageDataUrl) {
+    const img = new Image();
+    img.onload = () => {
+      uploadEntranceImage(img);
+      state.entrance._cachedImg = img;
+    };
+    img.src = state.entrance.imageDataUrl;
+  }
+  // If a saved-favorite shader was persisted for the entrance, recompile
+  // the main program now so shaderEntrance() contains that body before any
+  // frames render.
+  if (state.entrance.shaderId === 'fav' && state.entrance.shaderBody) {
+    recompileMainWithEntrance();
+  }
+
+  // Physical room model (must match the GLSL ROOM_W/ROOM_D/WALL_H/EYE_H constants)
+  const ROOM_W = 5.5, ROOM_D = 8.0, WALL_H = 2.5, EYE_H = 1.6;
+
+  function normalize3(v) {
+    const L = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0]/L, v[1]/L, v[2]/L];
+  }
+  function faceUVToDir(uv01, face) {
+    let P;
+    const [u, v] = uv01;
+    switch (face.key) {
+      case 'top':    P = [(u - 0.5) * ROOM_W, (1 - v) * WALL_H,  ROOM_D * 0.5]; break;
+      case 'left':   P = [-ROOM_W * 0.5,      (1 - u) * WALL_H, (0.5 - v) * ROOM_D]; break;
+      case 'floor':  P = [(u - 0.5) * ROOM_W, 0,                (0.5 - v) * ROOM_D]; break;
+      case 'right':  P = [ ROOM_W * 0.5,       u * WALL_H,      (0.5 - v) * ROOM_D]; break;
+      case 'bottom': P = [(u - 0.5) * ROOM_W,  v * WALL_H,      -ROOM_D * 0.5]; break;
+      default: return [0, 0, -1];
+    }
+    return normalize3([P[0] - 0, P[1] - EYE_H, P[2] - 0]);
+  }
+
+  // Map a pixel position in canvas space to (face, uv, direction) — or null if outside.
+  function pxToFaceDir(px, py) {
+    // entrance is opaque so it eats clicks but doesn't have a direction
+    for (const f of FACES) {
+      if (!f.entrance) continue;
+      if (px >= f.x && px < f.x + f.w && py >= f.y && py < f.y + f.h) return { face: f, dir: null };
+    }
+    for (const f of FACES) {
+      if (f.entrance) continue;
+      if (px >= f.x && px < f.x + f.w && py >= f.y && py < f.y + f.h) {
+        const uv = [(px - f.x) / f.w, (py - f.y) / f.h];
+        return { face: f, dir: faceUVToDir(uv, f) };
+      }
+    }
+    return null;
+  }
+
+  // Convert client (CSS) coords into canvas top-left venue px space.
+  function clientToVenuePx(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) / rect.width  * VENUE_W;
+    const y = (clientY - rect.top)  / rect.height * VENUE_H;
+    return [x, y];
+  }
+
+  // ---------- mouse + clicks ----------
+  function updateMouseFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+      state.mouseValid = 0; return;
+    }
+    const [px, py] = clientToVenuePx(e.clientX, e.clientY);
+    const hit = pxToFaceDir(px, py);
+    if (hit && hit.dir) {
+      state.mouseDir = hit.dir;
+      state.mouseValid = 1;
+    } else {
+      state.mouseValid = 0;
+    }
+  }
+  window.addEventListener('mousemove', updateMouseFromEvent);
+  window.addEventListener('touchmove', e => { if (e.touches.length) updateMouseFromEvent(e.touches[0]); }, { passive: true });
+
+  function spawnClick(clientX, clientY) {
+    // ignore clicks on UI chrome
+    const tgt = document.elementFromPoint(clientX, clientY);
+    if (tgt && tgt.closest('.dock, .info-card, .sys-pill, .venue-tag')) return;
+    const rect = canvas.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
+    const [px, py] = clientToVenuePx(clientX, clientY);
+    const hit = pxToFaceDir(px, py);
+    if (!hit || !hit.dir) return;
+    const t = (performance.now() / 1000) - state.startTime;
+    state.clicks.push({ dir: hit.dir, t, vx: px / VENUE_W, vy: py / VENUE_H });
+    if (state.clicks.length > 8) state.clicks.shift();
+    // viewport pulse
+    const el = document.createElement('div');
+    el.className = 'click-pulse';
+    el.style.left = clientX + 'px';
+    el.style.top  = clientY + 'px';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 750);
+  }
+  window.addEventListener('mousedown', e => { if (e.button === 0) spawnClick(e.clientX, e.clientY); });
+  window.addEventListener('touchstart', e => { if (e.touches.length) { const t = e.touches[0]; spawnClick(t.clientX, t.clientY); } }, { passive: true });
+
+  // ---------- resize ----------
+  function resize() {
+    const renderW = Math.round(VENUE_W * state.quality);
+    const renderH = Math.round(VENUE_H * state.quality);
+    if (canvas.width !== renderW || canvas.height !== renderH) {
+      canvas.width = renderW;
+      canvas.height = renderH;
+      gl.viewport(0, 0, renderW, renderH);
+    }
+    if (typeof resizeP5Canvas === 'function') resizeP5Canvas();
+    document.getElementById('quality-label').textContent =
+      'render · ' + (state.quality === 1 ? 'full' : state.quality === 0.5 ? '½' : '¼');
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- render loop ----------
+  let frameCount = 0, fpsLastT = performance.now(), fpsAvg = 60;
+  const fpsEl = document.getElementById('fps');
+
+  function frame(tsMs) {
+    // when p5 is active we drive the WebGL pass differently
+    if (document.body.classList.contains('p5-active')) {
+      if (state.fpsCap > 0) {
+        const dt = tsMs - state.lastFrameT;
+        const target = 1000 / state.fpsCap;
+        if (dt < target - 1) { requestAnimationFrame(frame); return; }
+      }
+      state.lastFrameT = tsMs;
+      // Drive p5 ourselves (doesn't pause when document is hidden)
+      tickP5();
+      // Then unfold the (just-updated) p5 snapshot onto the venue cross
+      if (state.p5Unfold !== 'raw') {
+        renderP5Unfold();
+      }
+      requestAnimationFrame(frame);
+      return;
+    }
+    // FPS cap — skips the whole pass if we're ahead of schedule.
+    if (state.fpsCap > 0) {
+      const dt = tsMs - state.lastFrameT;
+      const target = 1000 / state.fpsCap;
+      if (dt < target - 1) { requestAnimationFrame(frame); return; }
+    }
+    state.lastFrameT = tsMs;
+
+    // smooth mouseDir (spherical lerp via normalize)
+    for (let i = 0; i < 3; i++) {
+      state.mouseDirSmoothed[i] += (state.mouseDir[i] - state.mouseDirSmoothed[i]) * 0.15;
+    }
+    const m = normalize3(state.mouseDirSmoothed);
+
+    const now = (performance.now() / 1000) - state.startTime;
+    while (state.clicks.length && now - state.clicks[0].t > 5.0) state.clicks.shift();
+
+    gl.uniform2f(U.res, canvas.width, canvas.height);
+    gl.uniform1f(U.time, now);
+    gl.uniform3f(U.mouseDir, m[0], m[1], m[2]);
+    gl.uniform1f(U.mouseValid, state.mouseValid);
+    gl.uniform1i(U.shaderId, state.activeIdx);
+
+    // Entrance background uniforms.
+    setEntranceUniforms(U, state.entrance);
+
+    const arr = new Float32Array(32);
+    for (let i = 0; i < state.clicks.length; i++) {
+      const c = state.clicks[i];
+      arr[i*4+0] = c.dir[0];
+      arr[i*4+1] = c.dir[1];
+      arr[i*4+2] = c.dir[2];
+      arr[i*4+3] = c.t;
+    }
+    gl.uniform4fv(U.clicks, arr);
+    gl.uniform1i(U.clickCount, state.clicks.length);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // fps
+    frameCount++;
+    const t = performance.now();
+    if (t - fpsLastT > 500) {
+      fpsAvg = fpsAvg * 0.5 + (frameCount * 1000 / (t - fpsLastT)) * 0.5;
+      fpsEl.textContent = Math.round(fpsAvg) + ' fps';
+      frameCount = 0;
+      fpsLastT = t;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- face overlay (HTML labels, positioned in % of stage) ----------
+  function buildOverlay() {
+    const ov = document.getElementById('face-overlay');
+    ov.innerHTML = '';
+    for (const f of FACES) {
+      const div = document.createElement('div');
+      div.className = 'face-rect' + (f.entrance ? ' entrance' : '');
+      div.style.left   = (f.x / VENUE_W * 100) + '%';
+      div.style.top    = (f.y / VENUE_H * 100) + '%';
+      div.style.width  = (f.w / VENUE_W * 100) + '%';
+      div.style.height = (f.h / VENUE_H * 100) + '%';
+      const lbl = document.createElement('div');
+      lbl.className = 'face-label';
+      lbl.textContent = f.label;
+      div.appendChild(lbl);
+      if (!f.entrance) {
+        const meta = document.createElement('div');
+        meta.className = 'face-meta';
+        meta.textContent = `${f.w}×${f.h} · ${f.where}`;
+        div.appendChild(meta);
+      }
+      ov.appendChild(div);
+    }
+  }
+
+  // ---------- thumbnail mini-renders for dock ----------
+  // (compile the same fragment + vertex into each tile's GL context)
+  const thumbSources = {
+    vs: document.getElementById('vertex-shader').textContent,
+    fs: document.getElementById('fragment-shader').textContent,
+  };
+  function renderThumbnail(canvasEl, shaderIdx) {
+    const tgl = canvasEl.getContext('webgl', { antialias: false });
+    if (!tgl) return;
+    const tvs = tgl.createShader(tgl.VERTEX_SHADER);
+    tgl.shaderSource(tvs, thumbSources.vs);
+    tgl.compileShader(tvs);
+    const tfs = tgl.createShader(tgl.FRAGMENT_SHADER);
+    tgl.shaderSource(tfs, thumbSources.fs);
+    tgl.compileShader(tfs);
+    const tp = tgl.createProgram();
+    tgl.attachShader(tp, tvs); tgl.attachShader(tp, tfs);
+    tgl.bindAttribLocation(tp, 0, 'a_pos');
+    tgl.linkProgram(tp);
+    if (!tgl.getProgramParameter(tp, tgl.LINK_STATUS)) return;
+    tgl.useProgram(tp);
+    const tb = tgl.createBuffer();
+    tgl.bindBuffer(tgl.ARRAY_BUFFER, tb);
+    tgl.bufferData(tgl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), tgl.STATIC_DRAW);
+    tgl.enableVertexAttribArray(0);
+    tgl.vertexAttribPointer(0, 2, tgl.FLOAT, false, 0, 0);
+    const tW = canvasEl.width, tH = canvasEl.height;
+    tgl.viewport(0, 0, tW, tH);
+    // for thumbnails we set u_res to the venue canvas dims so the cross is rendered
+    // shrunk into the thumb — that gives an at-a-glance preview of the layout.
+    const u = {
+      res: tgl.getUniformLocation(tp, 'u_res'),
+      time: tgl.getUniformLocation(tp, 'u_time'),
+      mouseDir: tgl.getUniformLocation(tp, 'u_mouseDir'),
+      mouseValid: tgl.getUniformLocation(tp, 'u_mouseValid'),
+      clicks: tgl.getUniformLocation(tp, 'u_clicks'),
+      clickCount: tgl.getUniformLocation(tp, 'u_clickCount'),
+      shaderId: tgl.getUniformLocation(tp, 'u_shaderId'),
+    };
+    // We want the thumb to show the cross too, but it's stretched. Render the shader directly
+    // by using a synthetic "full canvas" with venue rects scaled to thumb. Trick: just pass
+    // tW,tH but the shader uses VENUE_W/H constants — so it would show only a corner.
+    // Easier: render the thumb as if it WERE the venue, by passing u_res = canvas size matching
+    // venue aspect. canvasEl is already 56×80 = 7:10 venue aspect, so the constants line up.
+    const seed = shaderIdx * 7.3;
+    let f = 0;
+    function loop() {
+      const t = seed + f * 0.03;
+      // scale the venue rects proportionally — handled implicitly because thumb is 7:10
+      tgl.uniform2f(u.res, tW, tH);
+      tgl.uniform1f(u.time, t);
+      // mouse drifts in a circle on a unit sphere
+      tgl.uniform3f(u.mouseDir,
+        Math.cos(t * 0.3),
+        Math.sin(t * 0.4) * 0.3,
+        -Math.sin(t * 0.3));
+      tgl.uniform1f(u.mouseValid, 1);
+      tgl.uniform4fv(u.clicks, new Float32Array(32));
+      tgl.uniform1i(u.clickCount, 0);
+      tgl.uniform1i(u.shaderId, shaderIdx);
+      // We need to tell this thumb's shader to treat its canvas as the venue. Trick:
+      // the GLSL constants R_TOP etc are in 2688x3840 space. To scale them to tW×tH we'd
+      // need to rewrite. Simpler: render at venue resolution and scale via CSS — but a
+      // thumb-sized framebuffer doesn't allow that. Instead: thumbnails render the shader
+      // domain DIRECTLY (not the cross). For dock-level "what does this look like" the
+      // shader sampled at the floor face (full hemisphere) is plenty representative.
+      tgl.drawArrays(tgl.TRIANGLES, 0, 3);
+      f++;
+      requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  // To render thumbnails representatively, we make a SECOND, simpler shader that
+  // samples the sphere at the floor's down-looking projection — a single rectilinear
+  // view. Replace the thumbnail render with that. (Use a separate program string.)
+  // The thumb fragment shader is the same source minus its main(); we tack on
+  // a single-face main() at the bottom that ignores the venue cross routing
+  // and just samples the active shader across a 100° rectilinear view.
+  // The full source already declares all uniforms—DO NOT redeclare them here
+  // or WebGL throws "redefinition" errors.
+  function buildThumbFS(customBody) {
+    return buildFragmentSrc(customBody)
+      .replace(/void main\(\)[\s\S]*$/, '')
+      + `
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res.xy;
+  float fov = 100.0;
+  float tx = (uv.x * 2.0 - 1.0) * tan(radians(fov * 0.5));
+  float ty = (uv.y * 2.0 - 1.0) * tan(radians(fov * 0.5));
+  vec3 dir = normalize(vec3(tx, ty, -1.0));
+  vec3 col;
+  if (u_shaderId == 0) col = shaderAurora(dir);
+  else col = shaderCustom(dir);
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+  }
+  let THUMB_FS = buildThumbFS(state.customBody);
+
+  function renderThumbnailFlat(canvasEl, shaderIdx, fsOverride) {
+    const tgl = canvasEl.getContext('webgl', { antialias: false });
+    if (!tgl) return null;
+    let tp = null;
+    let u = null;
+    let alive = true;
+
+    function buildThumbProgram(fsSrc) {
+      const tvs = tgl.createShader(tgl.VERTEX_SHADER);
+      tgl.shaderSource(tvs, thumbSources.vs);
+      tgl.compileShader(tvs);
+      const tfs = tgl.createShader(tgl.FRAGMENT_SHADER);
+      tgl.shaderSource(tfs, fsSrc);
+      tgl.compileShader(tfs);
+      if (!tgl.getShaderParameter(tfs, tgl.COMPILE_STATUS)) {
+        console.warn('Thumb fs failed:', tgl.getShaderInfoLog(tfs));
+        tgl.deleteShader(tvs); tgl.deleteShader(tfs);
+        return false;
+      }
+      const np = tgl.createProgram();
+      tgl.attachShader(np, tvs); tgl.attachShader(np, tfs);
+      tgl.bindAttribLocation(np, 0, 'a_pos');
+      tgl.linkProgram(np);
+      tgl.deleteShader(tvs); tgl.deleteShader(tfs);
+      if (!tgl.getProgramParameter(np, tgl.LINK_STATUS)) {
+        tgl.deleteProgram(np);
+        return false;
+      }
+      if (tp) tgl.deleteProgram(tp);
+      tp = np;
+      tgl.useProgram(tp);
+      u = {
+        res: tgl.getUniformLocation(tp, 'u_res'),
+        time: tgl.getUniformLocation(tp, 'u_time'),
+        mouseDir: tgl.getUniformLocation(tp, 'u_mouseDir'),
+        mouseValid: tgl.getUniformLocation(tp, 'u_mouseValid'),
+        clicks: tgl.getUniformLocation(tp, 'u_clicks'),
+        clickCount: tgl.getUniformLocation(tp, 'u_clickCount'),
+        shaderId: tgl.getUniformLocation(tp, 'u_shaderId'),
+      };
+      return true;
+    }
+
+    if (!buildThumbProgram(fsOverride || THUMB_FS)) return null;
+
+    const tb = tgl.createBuffer();
+    tgl.bindBuffer(tgl.ARRAY_BUFFER, tb);
+    tgl.bufferData(tgl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), tgl.STATIC_DRAW);
+    tgl.enableVertexAttribArray(0);
+    tgl.vertexAttribPointer(0, 2, tgl.FLOAT, false, 0, 0);
+    canvasEl.width = 112; canvasEl.height = 112;
+    tgl.viewport(0, 0, 112, 112);
+    const seed = shaderIdx * 7.3;
+    let f = 0;
+    function loop() {
+      if (!alive) return;
+      if (!tp || !u) { requestAnimationFrame(loop); return; }
+      const t = seed + f * 0.03;
+      tgl.uniform2f(u.res, 112, 112);
+      tgl.uniform1f(u.time, t);
+      tgl.uniform3f(u.mouseDir, Math.cos(t * 0.3), Math.sin(t * 0.4) * 0.3, -Math.abs(Math.sin(t * 0.3)) - 0.4);
+      tgl.uniform1f(u.mouseValid, 1);
+      tgl.uniform4fv(u.clicks, new Float32Array(32));
+      tgl.uniform1i(u.clickCount, 0);
+      tgl.uniform1i(u.shaderId, shaderIdx);
+      tgl.drawArrays(tgl.TRIANGLES, 0, 3);
+      f++;
+      requestAnimationFrame(loop);
+    }
+    loop();
+    return {
+      rebuild: (newFsSrc) => buildThumbProgram(newFsSrc),
+      dispose: () => { alive = false; if (tp) tgl.deleteProgram(tp); tp = null; },
+    };
+  }
+
+  // Paint a static "p5" placeholder thumbnail for favorites stored as p5
+  // sketches — we can't easily live-render p5 in a 112×112 canvas without
+  // spinning up a whole p5 instance per favorite.
+  function paintP5Placeholder(canvasEl, name) {
+    canvasEl.width = 112; canvasEl.height = 112;
+    const c2d = canvasEl.getContext('2d');
+    if (!c2d) return null;
+    const g = c2d.createLinearGradient(0, 0, 112, 112);
+    g.addColorStop(0, '#4a1f7a');
+    g.addColorStop(0.55, '#1e1140');
+    g.addColorStop(1, '#070612');
+    c2d.fillStyle = g;
+    c2d.fillRect(0, 0, 112, 112);
+    // soft dots
+    for (let i = 0; i < 14; i++) {
+      const a = i * 0.7 + name.length * 0.13;
+      const x = 56 + Math.cos(a) * (20 + (i % 4) * 8);
+      const y = 56 + Math.sin(a * 1.3) * (20 + (i % 3) * 7);
+      c2d.fillStyle = `rgba(${180 + (i*9)%50}, ${130 + (i*7)%80}, 255, ${0.15 + (i%5)*0.08})`;
+      c2d.beginPath();
+      c2d.arc(x, y, 6 + (i % 3) * 3, 0, Math.PI * 2);
+      c2d.fill();
+    }
+    c2d.fillStyle = 'rgba(220, 180, 255, 0.85)';
+    c2d.font = 'bold 30px "JetBrains Mono", monospace';
+    c2d.textAlign = 'center';
+    c2d.textBaseline = 'middle';
+    c2d.fillText('p5', 56, 56);
+    return { rebuild: () => true, dispose: () => {} };
+  }
+
+  // ---------- dock UI ----------
+  // Each dock entry is either a built-in shader or a saved favorite.
+  // We rebuild the dock from scratch whenever favorites change so the
+  // ordering/state stay coherent.
+  const dock = document.getElementById('dock');
+  // dockEntries: [{ kind:'shader'|'fav', shaderIdx?, favId?, tile, thumbHandle }, …]
+  let dockEntries = [];
+  // activeFavId is non-null only when the *current* Custom body matches a
+  // saved favorite (i.e. the user just loaded one and hasn't edited yet).
+  let activeFavId = null;
+
+  function escapeAttr(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function makeTile(labelText, klass) {
+    const tile = document.createElement('div');
+    tile.className = 'tile' + (klass ? ' ' + klass : '');
+    const c = document.createElement('canvas');
+    c.width = 112; c.height = 112;
+    tile.appendChild(c);
+    const lbl = document.createElement('span');
+    lbl.className = 'label';
+    lbl.textContent = labelText;
+    tile.appendChild(lbl);
+    return tile;
+  }
+
+  function rebuildDock() {
+    // Tear down existing tiles (and their RAF loops)
+    dockEntries.forEach(e => {
+      if (e.thumbHandle && e.thumbHandle.dispose) e.thumbHandle.dispose();
+      if (e.tile && e.tile.parentNode) e.tile.parentNode.removeChild(e.tile);
+    });
+    dockEntries = [];
+
+    const sep = dock.querySelector('.sep-vert');
+
+    // Layout order: Aurora → saved favorites → Custom (always rightmost).
+    // The Custom slot stays pinned to the end so the "editable" wallpaper is
+    // always at the same predictable position no matter how many favorites
+    // the user has saved.
+    const built = SHADERS.map((s, i) => ({ shader: s, idx: i }));
+    const auroraEntry = built.find(b => b.shader.id === 'aurora');
+    const customEntry = built.find(b => b.shader.id === 'custom');
+
+    const addBuiltInTile = (b) => {
+      const tile = makeTile(b.shader.name);
+      tile.title = b.shader.name + ' — ' + b.shader.desc +
+                   (b.shader.id === 'custom' ? ' (right-click to edit code)' : '');
+      tile.addEventListener('click', () => activateShader(b.idx));
+      if (b.shader.id === 'custom') {
+        // Right-click on the Custom tile = open the code editor immediately
+        tile.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          activateShader(b.idx);
+          toggleCodePanel(true);
+        });
+      }
+      dock.insertBefore(tile, sep);
+      const handle = renderThumbnailFlat(tile.querySelector('canvas'), b.idx);
+      dockEntries.push({ kind: 'shader', shaderIdx: b.idx, tile, thumbHandle: handle });
+    };
+
+    // 1. Aurora first
+    if (auroraEntry) addBuiltInTile(auroraEntry);
+
+    // 2. Saved favorites — each becomes its own tile in the middle of the dock.
+    const favs = loadFavs();
+    favs.forEach(f => {
+      const tile = makeTile(f.name, 'fav');
+      const star = document.createElement('span');
+      star.className = 'fav-star';
+      star.textContent = '★';
+      tile.appendChild(star);
+      tile.title = `★ ${f.name} (${f.mode.toUpperCase()}) — click: load · right-click: edit code · double-click: rename`;
+      tile.addEventListener('click', () => loadFav(f.id));
+      // Right-click = load + open the editor so the user can tweak this favorite.
+      // (Deletion is via the × on the chip in the code panel — keeps right-click
+      // single-purpose so we never accidentally delete a saved favorite.)
+      tile.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        loadFav(f.id);
+        toggleCodePanel(true);
+      });
+      // Double-click anywhere on the tile = rename
+      tile.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        renameFav(f.id);
+      });
+      dock.insertBefore(tile, sep);
+
+      const cnv = tile.querySelector('canvas');
+      let handle;
+      if (f.mode === 'glsl') {
+        const favThumbFs = buildThumbFS(f.body);
+        handle = renderThumbnailFlat(cnv, CUSTOM_IDX, favThumbFs);
+      }
+      if (!handle) {
+        handle = paintP5Placeholder(cnv, f.name);
+      }
+      dockEntries.push({ kind: 'fav', favId: f.id, mode: f.mode, tile, thumbHandle: handle });
+    });
+
+    // 3. Custom built-in — pinned to the right of everything else.
+    if (customEntry) addBuiltInTile(customEntry);
+
+    updateActiveTileClasses();
+  }
+
+  function updateActiveTileClasses() {
+    dockEntries.forEach(e => {
+      let active = false;
+      if (e.kind === 'shader') {
+        if (e.shaderIdx === CUSTOM_IDX) {
+          // Custom built-in is only "active" when no favorite is loaded
+          active = (state.activeIdx === CUSTOM_IDX) && (activeFavId == null);
+        } else {
+          active = (state.activeIdx === e.shaderIdx);
+        }
+      } else if (e.kind === 'fav') {
+        active = (state.activeIdx === CUSTOM_IDX) && (activeFavId === e.favId);
+      }
+      e.tile.classList.toggle('active', active);
+    });
+  }
+
+  // Activate a built-in shader by index. (Custom-via-favorite goes through
+  // loadFav() instead, which calls this with CUSTOM_IDX and sets activeFavId.)
+  function activateShader(i) {
+    activeFavId = null;
+    setActive(i);
+  }
+
+  function activateEntry(entry) {
+    if (!entry) return;
+    if (entry.kind === 'shader') activateShader(entry.shaderIdx);
+    else if (entry.kind === 'fav') loadFav(entry.favId);
+  }
+
+  function findActiveEntryIdx() {
+    return dockEntries.findIndex(e => {
+      if (e.kind === 'shader') {
+        if (e.shaderIdx === CUSTOM_IDX) return state.activeIdx === CUSTOM_IDX && activeFavId == null;
+        return state.activeIdx === e.shaderIdx;
+      }
+      return state.activeIdx === CUSTOM_IDX && activeFavId === e.favId;
+    });
+  }
+
+  function cycleDock(delta) {
+    if (!dockEntries.length) return;
+    const cur = Math.max(0, findActiveEntryIdx());
+    const next = (cur + delta + dockEntries.length) % dockEntries.length;
+    activateEntry(dockEntries[next]);
+  }
+
+  function setActive(i) {
+    state.activeIdx = i;
+    const s = SHADERS[i];
+    document.getElementById('info-title').textContent = s.name;
+    document.getElementById('info-desc').textContent = s.desc;
+    document.getElementById('shader-id').textContent = s.id;
+    document.querySelector('.info-card .eyebrow .idx').textContent = String(i + 1).padStart(2, '0');
+    updateActiveTileClasses();
+    // p5 only renders when Custom is active AND user is in p5 mode AND an instance exists
+    const wantP5 = (i === CUSTOM_IDX) && (state.customMode === 'p5') && !!p5Instance;
+    setP5Active(wantP5);
+  }
+
+  // ---------- p5.js instance management ----------
+  let p5Instance = null;
+  let p5UserDraw = null;       // draw-body mode: compiled function (p, clicks) → void
+  let p5SketchMode = false;    // true when user supplied full setup()/draw() etc.
+  let p5RuntimeStatus = null;  // {kind:'ok'|'err', msg} set when draw throws
+
+  // Intermediate 2D canvas. We snapshot the p5 canvas into this immediately
+  // after each draw() — that way WEBGL p5 canvases (whose drawing buffer is
+  // cleared by the compositor after paint) are still readable when we go to
+  // upload them as a WebGL texture in the unfold pass.
+  const p5Snap = document.createElement('canvas');
+  const p5SnapCtx = p5Snap.getContext('2d');
+  let p5SnapDirty = false;
+
+  function snapshotP5(srcCanvas) {
+    if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) return;
+    // Always snapshot at the source's NATURAL size — do not force-resample
+    // to 2:1 (that double-distorts content authored as non-panorama, and
+    // wastes work for content authored at the right size already).
+    // The user is responsible for sizing their canvas as 2:1 (e.g.
+    // createCanvas(2048, 1024)) when authoring panorama content.
+    if (p5Snap.width !== srcCanvas.width || p5Snap.height !== srcCanvas.height) {
+      p5Snap.width  = srcCanvas.width;
+      p5Snap.height = srcCanvas.height;
+    }
+    try {
+      p5SnapCtx.drawImage(srcCanvas, 0, 0);
+      p5SnapDirty = true;
+    } catch (e) {
+      // ignore — first frame race or sec error
+    }
+  }
+
+  // Compile user code. Two supported styles:
+  //   1. "draw body": just the body of draw() — quick demos
+  //   2. "full sketch": user defines function setup() / draw() / etc themselves
+  // We detect (2) by looking for `function setup` or `function draw` etc.
+  function compileP5Body(body) {
+    const isFullSketch =
+      /\bfunction\s+(setup|draw|preload|mousePressed|mouseReleased|mouseDragged|mouseMoved|mouseWheel|keyPressed|keyReleased|keyTyped|touchStarted|touchMoved|touchEnded|windowResized)\s*\(/
+        .test(body);
+
+    if (isFullSketch) {
+      // Wrap user code in `with(p)` so bare p5 globals (createCanvas, WEBGL,
+      // background, image…) resolve to p.* in instance mode. Function decls
+      // hoist to this wrapper's scope; we copy them onto p.* afterwards.
+      try {
+        const src =
+          'with (p) {\n' +
+          body + '\n' +
+          // hand-listed event names — typeof is safe for undeclared idents
+          "  if (typeof setup === 'function')         p.setup = setup;\n" +
+          "  if (typeof preload === 'function')       p.preload = preload;\n" +
+          "  if (typeof draw === 'function')          p.draw = draw;\n" +
+          "  if (typeof mousePressed === 'function')  p.mousePressed = mousePressed;\n" +
+          "  if (typeof mouseReleased === 'function') p.mouseReleased = mouseReleased;\n" +
+          "  if (typeof mouseDragged === 'function')  p.mouseDragged = mouseDragged;\n" +
+          "  if (typeof mouseMoved === 'function')    p.mouseMoved = mouseMoved;\n" +
+          "  if (typeof mouseWheel === 'function')    p.mouseWheel = mouseWheel;\n" +
+          "  if (typeof keyPressed === 'function')    p.keyPressed = keyPressed;\n" +
+          "  if (typeof keyReleased === 'function')   p.keyReleased = keyReleased;\n" +
+          "  if (typeof keyTyped === 'function')      p.keyTyped = keyTyped;\n" +
+          "  if (typeof touchStarted === 'function')  p.touchStarted = touchStarted;\n" +
+          "  if (typeof touchMoved === 'function')    p.touchMoved = touchMoved;\n" +
+          "  if (typeof touchEnded === 'function')    p.touchEnded = touchEnded;\n" +
+          "  if (typeof windowResized === 'function') p.windowResized = windowResized;\n" +
+          '}';
+        const fn = new Function('p', 'clicks', src);
+        return { fn, mode: 'sketch' };
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+
+    // Draw-body mode
+    try {
+      const fn = new Function('p', 'clicks', 'with (p) {\n' + body + '\n}');
+      return { fn, mode: 'draw' };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  // Relocate a freshly created p5 canvas into stage-inner with id #p5-canvas
+  function relocateP5Canvas(canvasEl) {
+    if (!canvasEl) return;
+    const old = document.getElementById('p5-canvas');
+    if (old && old !== canvasEl) old.parentNode.replaceChild(canvasEl, old);
+    else if (!old) document.getElementById('stage-inner').appendChild(canvasEl);
+    canvasEl.id = 'p5-canvas';
+  }
+
+  // Build a "draw-body" p5 instance (we provide setup at venue resolution).
+  // We disable p5's internal draw loop and drive redraw() ourselves from the
+  // main RAF — that way document-hidden-pauses, FPS caps, and the
+  // capture-to-snapshot timing all live in one place.
+  function createDrawBodyInstance() {
+    return new p5((p) => {
+      p.setup = () => {
+        const renderW = Math.round(VENUE_W * state.quality);
+        const renderH = Math.round(VENUE_H * state.quality);
+        p.createCanvas(renderW, renderH);
+        relocateP5Canvas(p.canvas);
+        p.pixelDensity(1);
+        p.noLoop();
+      };
+      p.draw = () => {
+        if (!p5UserDraw) return;
+        const cl = state.clicks.map(c => ({
+          x: c.vx != null ? c.vx : 0.5,
+          y: c.vy != null ? c.vy : 0.5,
+          t: c.t,
+        }));
+        try {
+          p5UserDraw(p, cl);
+          if (p5RuntimeStatus && p5RuntimeStatus.kind === 'err') {
+            p5RuntimeStatus = { kind: 'ok', msg: 'Running…' };
+          }
+          snapshotP5(p.canvas);
+        } catch (e) {
+          console.error('p5 draw error:', e);
+          p5RuntimeStatus = { kind: 'err', msg: 'Runtime: ' + e.message };
+          if (typeof setStatus === 'function') setStatus('Runtime: ' + e.message, 'err');
+          p5Running = false;
+        }
+      };
+    });
+  }
+
+  // Build a "full sketch" p5 instance — user's setup/draw take over.
+  // We also force noLoop() after their setup runs and drive draw ourselves
+  // (via redraw()) from our RAF so document-hidden doesn't pause us and
+  // we can hook the snapshot at a deterministic time.
+  function createFullSketchInstance(compiledFn) {
+    return new p5((p) => {
+      try {
+        const cl = () => state.clicks.map(c => ({
+          x: c.vx != null ? c.vx : 0.5,
+          y: c.vy != null ? c.vy : 0.5,
+          t: c.t,
+        }));
+        compiledFn(p, cl());
+      } catch (e) {
+        console.error('p5 sketch init error:', e);
+        if (typeof setStatus === 'function') setStatus('Init error: ' + e.message, 'err');
+        return;
+      }
+      const userSetup = p.setup;
+      p.setup = function() {
+        try {
+          if (userSetup) userSetup.call(this);
+        } catch (e) {
+          console.error('p5 user setup error:', e);
+          if (typeof setStatus === 'function') setStatus('setup() error: ' + e.message, 'err');
+        }
+        relocateP5Canvas(p.canvas);
+        // Take over the draw loop ourselves
+        p.noLoop();
+      };
+      const userDraw = p.draw;
+      if (userDraw) {
+        p.draw = function() {
+          try {
+            userDraw.call(this);
+            snapshotP5(p.canvas);
+          } catch (e) {
+            console.error('p5 user draw error:', e);
+            if (typeof setStatus === 'function') setStatus('draw() error: ' + e.message, 'err');
+            p5Running = false;
+          }
+        };
+      }
+    });
+  }
+
+  let p5Running = false;  // whether we should be calling redraw each frame
+
+  // Step the p5 instance one frame, ignoring document.hidden (p5's default
+  // built-in raf pauses when hidden — we drive it ourselves).
+  function tickP5() {
+    if (!p5Running || !p5Instance) return;
+    try {
+      if (typeof p5Instance.redraw === 'function') p5Instance.redraw();
+    } catch (e) {
+      console.error('p5 tick error:', e);
+      p5Running = false;
+    }
+  }
+
+  function destroyP5() {
+    if (p5Instance) {
+      try { p5Instance.remove(); } catch(e) {}
+      p5Instance = null;
+    }
+    // Ensure a placeholder canvas survives so the CSS hooks keep working
+    if (!document.getElementById('p5-canvas')) {
+      const c = document.createElement('canvas');
+      c.id = 'p5-canvas';
+      document.getElementById('stage-inner').appendChild(c);
+    }
+  }
+
+  function setP5Active(active) {
+    document.body.classList.toggle('p5-active', active);
+    document.body.classList.toggle('p5-unfold', active && state.p5Unfold !== 'raw');
+    p5Running = !!active;
+  }
+
+  function resizeP5Canvas() {
+    // Only auto-resize in draw-body mode (we own the canvas dims). In
+    // full-sketch mode, the user picked their own size — leave it alone.
+    if (!p5Instance || p5SketchMode) return;
+    const renderW = Math.round(VENUE_W * state.quality);
+    const renderH = Math.round(VENUE_H * state.quality);
+    if (p5Instance.width !== renderW || p5Instance.height !== renderH) {
+      try { p5Instance.resizeCanvas(renderW, renderH); } catch(e) {}
+    }
+  }
+
+  // ---------- custom code panel ----------
+  const codeBtn   = document.getElementById('btn-code');
+  const codePanel = document.getElementById('code-panel');
+  const codeTA    = document.getElementById('cp-code');
+  const codeStat  = document.getElementById('cp-status');
+  const codeApply = document.getElementById('cp-apply');
+  const codeReset = document.getElementById('cp-reset');
+  const codeClose = document.getElementById('cp-close');
+  const codeModeBtns  = document.querySelectorAll('#cp-mode button');
+  const codeModeLabel = document.getElementById('cp-mode-label');
+  const codeHintGLSL  = document.getElementById('cp-hint-glsl');
+  const codeHintP5    = document.getElementById('cp-hint-p5');
+  codeTA.value = state.customBody;
+
+  function setStatus(msg, kind) {
+    codeStat.textContent = msg;
+    codeStat.classList.remove('ok', 'err');
+    if (kind) codeStat.classList.add(kind);
+  }
+
+  function setMode(mode) {
+    // save the textarea contents into whatever mode we're currently in
+    if (state.customMode === 'glsl') state.customBody = codeTA.value;
+    else state.p5Body = codeTA.value;
+
+    state.customMode = mode;
+    codeModeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    codeModeLabel.textContent = mode === 'glsl' ? 'GLSL' : 'p5.js';
+    codeHintGLSL.style.display = mode === 'glsl' ? '' : 'none';
+    codeHintP5.style.display   = mode === 'p5'   ? '' : 'none';
+    codeTA.value = mode === 'glsl' ? state.customBody : state.p5Body;
+    setStatus('Mode: ' + (mode === 'glsl' ? 'GLSL fragment' : 'p5.js sketch') +
+              ' · press Apply to run.', null);
+  }
+  codeModeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  // p5 unfold mode toggle
+  const unfoldBtns = document.querySelectorAll('#cp-unfold button');
+  function setUnfold(mode) {
+    state.p5Unfold = mode;
+    unfoldBtns.forEach(b => b.classList.toggle('active', b.dataset.unfold === mode));
+    if (document.body.classList.contains('p5-active')) {
+      document.body.classList.toggle('p5-unfold', mode !== 'raw');
+    }
+    setStatus('Venue mapping: ' + mode, null);
+  }
+  unfoldBtns.forEach(b => b.addEventListener('click', () => setUnfold(b.dataset.unfold)));
+
+  // Yaw offset slider — rotates panorama on the sphere
+  const yawSlider = document.getElementById('cp-yaw');
+  const yawVal    = document.getElementById('cp-yaw-val');
+  if (yawSlider) {
+    yawSlider.value = state.p5YawOffset;
+    yawVal.textContent = (state.p5YawOffset >= 0 ? '+' : '') + state.p5YawOffset + '°';
+    yawSlider.addEventListener('input', () => {
+      state.p5YawOffset = parseFloat(yawSlider.value);
+      yawVal.textContent = (state.p5YawOffset >= 0 ? '+' : '') + state.p5YawOffset + '°';
+    });
+  }
+
+  function toggleCodePanel(open) {
+    const show = open !== undefined ? open : !codePanel.classList.contains('open');
+    codePanel.classList.toggle('open', show);
+    codeBtn.classList.toggle('active', show);
+    if (show) {
+      setTimeout(() => codeTA.focus(), 80);
+    }
+  }
+  codeBtn.addEventListener('click', () => toggleCodePanel());
+  codeClose.addEventListener('click', () => toggleCodePanel(false));
+
+  function applyGLSL(body) {
+    const entBody = (state.entrance.shaderId === 'fav') ? state.entrance.shaderBody : '';
+    const r = buildProgram(body, entBody);
+    if (r.error) {
+      const fullSrc = buildFragmentSrc(body, entBody);
+      const preludeBefore = fullSrc.indexOf('vec3 shaderCustom(vec3 dir) {\n') + 'vec3 shaderCustom(vec3 dir) {\n'.length;
+      const preludeLine = fullSrc.slice(0, preludeBefore).split('\n').length;
+      const remapped = r.error.replace(/(\d+):(\d+)/g, (m, a, b) => {
+        const userLine = parseInt(b, 10) - (preludeLine - 1);
+        return userLine > 0 ? `line ${userLine}` : m;
+      });
+      setStatus('GLSL compile error:\n' + remapped.trim(), 'err');
+      return false;
+    }
+    const oldProg = prog;
+    prog = r.program;
+    U = uniformsFor(prog);
+    gl.useProgram(prog);
+    if (oldProg) gl.deleteProgram(oldProg);
+    state.customBody = body;
+    THUMB_FS = buildThumbFS(body);
+    // Rebuild the live Custom tile's thumb so the dock preview matches.
+    const custEntry = dockEntries.find(e => e.kind === 'shader' && e.shaderIdx === CUSTOM_IDX);
+    if (custEntry && custEntry.thumbHandle && custEntry.thumbHandle.rebuild) {
+      custEntry.thumbHandle.rebuild(THUMB_FS);
+    }
+    // switch off p5 mode, switch to Custom shader
+    setP5Active(false);
+    setActive(CUSTOM_IDX);
+    setStatus('GLSL compiled OK · ' + body.split('\n').length + ' lines.', 'ok');
+    return true;
+  }
+
+  function applyP5(body) {
+    if (typeof p5 === 'undefined') {
+      setStatus('p5.js not loaded yet — try again in a moment.', 'err');
+      return false;
+    }
+    const compiled = compileP5Body(body);
+    if (compiled.error) {
+      setStatus('p5.js parse error:\n' + compiled.error, 'err');
+      return false;
+    }
+    state.p5Body = body;
+
+    // Tear down whatever's running and rebuild from scratch
+    destroyP5();
+    p5SketchMode = (compiled.mode === 'sketch');
+    p5UserDraw = null;
+    p5RuntimeStatus = null;
+
+    try {
+      if (p5SketchMode) {
+        p5Instance = createFullSketchInstance(compiled.fn);
+      } else {
+        p5UserDraw = compiled.fn;
+        p5Instance = createDrawBodyInstance();
+      }
+    } catch (e) {
+      setStatus('p5.js init error: ' + e.message, 'err');
+      return false;
+    }
+
+    setP5Active(true);
+    setActive(CUSTOM_IDX);
+    const lines = body.split('\n').length;
+    setStatus(
+      'p5.js running · ' + (p5SketchMode ? 'full sketch' : 'draw-body') +
+      ' · ' + lines + ' lines.',
+      'ok'
+    );
+    return true;
+  }
+
+  function applyCustomCode() {
+    const body = codeTA.value;
+    if (state.customMode === 'p5') return applyP5(body);
+    return applyGLSL(body);
+  }
+
+  codeApply.addEventListener('click', applyCustomCode);
+  codeReset.addEventListener('click', () => {
+    codeTA.value = state.customMode === 'p5' ? DEFAULT_P5_BODY : DEFAULT_CUSTOM_BODY;
+    activeFavId = null;
+    renderFavs();
+    applyCustomCode();
+  });
+
+  // ---------- favorites (★ saved snippets) ----------
+  // Stored in localStorage as an array of:
+  //   { id: string, name: string, mode: 'glsl'|'p5', body: string, ts: number }
+  // Switching modes auto-syncs the textarea to the per-mode body, so we
+  // pin "current code" to whatever the user is editing right now.
+  const FAV_KEY = 'shaderWallpapers.venue.favorites.v1';
+  const favListEl = document.getElementById('cp-fav-list');
+  const favSaveBtn = document.getElementById('cp-fav-save');
+  // activeFavId is declared above with the dock state — it's shared between
+  // the dock tiles and the chip strip so both can highlight the same fav.
+
+  function loadFavs() {
+    try {
+      const raw = localStorage.getItem(FAV_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveFavs(arr) {
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(arr)); }
+    catch (e) { console.warn('localStorage save failed:', e); }
+  }
+
+  function renderFavs() {
+    const favs = loadFavs();
+    favListEl.innerHTML = '';
+    if (!favs.length) {
+      const empty = document.createElement('span');
+      empty.className = 'cp-fav-empty';
+      empty.textContent = 'No saved snippets yet — click Save to keep your current code.';
+      favListEl.appendChild(empty);
+      return;
+    }
+    favs.forEach(f => {
+      const chip = document.createElement('button');
+      chip.className = 'cp-fav-chip' + (f.id === activeFavId ? ' active' : '');
+      chip.dataset.mode = f.mode;
+      chip.dataset.id   = f.id;
+      chip.title = `${f.name} — ${f.mode.toUpperCase()} · saved ${new Date(f.ts).toLocaleString()} — click to load`;
+      chip.innerHTML = '';
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = f.mode === 'p5' ? 'p5' : 'GLSL';
+      chip.appendChild(badge);
+      const nm = document.createElement('span');
+      nm.className = 'name';
+      nm.textContent = f.name;
+      chip.appendChild(nm);
+      const del = document.createElement('span');
+      del.className = 'del';
+      del.textContent = '×';
+      del.title = 'Delete this favorite';
+      chip.appendChild(del);
+
+      chip.addEventListener('click', (e) => {
+        if (e.target === del) {
+          e.stopPropagation();
+          deleteFav(f.id);
+          return;
+        }
+        loadFav(f.id);
+      });
+      // Double-click chip name = rename
+      chip.addEventListener('dblclick', (e) => {
+        if (e.target === del) return;
+        e.preventDefault();
+        e.stopPropagation();
+        renameFav(f.id);
+      });
+      favListEl.appendChild(chip);
+    });
+  }
+
+  function saveCurrentAsFav() {
+    // Pull whatever's in the textarea (covers in-flight edits)
+    const mode = state.customMode;
+    const body = codeTA.value;
+    const defaultName = (mode === 'p5' ? 'p5 sketch ' : 'GLSL ') +
+                        new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const name = prompt('Save this code as a favorite. Name:', defaultName);
+    if (name == null) return; // cancelled
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const favs = loadFavs();
+    const id = 'f_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    favs.unshift({ id, name: trimmed, mode, body, ts: Date.now() });
+    // Cap at 24 to keep localStorage modest
+    while (favs.length > 24) favs.pop();
+    saveFavs(favs);
+    activeFavId = id;
+    renderFavs();
+    rebuildDock();
+    if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
+    setStatus('★ Saved as "' + trimmed + '" (' + mode.toUpperCase() + ').', 'ok');
+  }
+
+  function deleteFav(id) {
+    const favs = loadFavs();
+    const item = favs.find(x => x.id === id);
+    if (!item) return;
+    if (!confirm('Delete favorite "' + item.name + '"?')) return;
+    const filtered = favs.filter(x => x.id !== id);
+    saveFavs(filtered);
+    if (activeFavId === id) activeFavId = null;
+    renderFavs();
+    rebuildDock();
+    if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
+    setStatus('Deleted favorite "' + item.name + '".', null);
+  }
+
+  function renameFav(id) {
+    const favs = loadFavs();
+    const item = favs.find(x => x.id === id);
+    if (!item) return;
+    const next = prompt('Rename favorite:', item.name);
+    if (next == null) return; // cancelled
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === item.name) return;
+    item.name = trimmed;
+    saveFavs(favs);
+    // If the entrance is currently pointing at this favorite, keep the cached
+    // name in sync so the dropdown label reflects the new name.
+    if (state.entrance.shaderId === 'fav' && state.entrance.shaderFavId === id) {
+      state.entrance.shaderName = trimmed;
+      saveEntranceState();
+    }
+    renderFavs();
+    rebuildDock();
+    if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
+    setStatus('Renamed favorite → "' + trimmed + '".', 'ok');
+  }
+
+  function loadFav(id) {
+    const favs = loadFavs();
+    const item = favs.find(x => x.id === id);
+    if (!item) return;
+    // Sync mode + textarea, then auto-apply so the wallpaper switches instantly.
+    if (state.customMode !== item.mode) {
+      // setMode() writes the *current* textarea back into its mode's state
+      // before switching — we want to drop that overwrite (it would clobber
+      // the body we're about to load). Save target body first.
+      state.customMode = item.mode === 'p5' ? 'glsl' : 'p5'; // force switch
+      setMode(item.mode);
+    }
+    codeTA.value = item.body;
+    if (item.mode === 'p5') state.p5Body = item.body;
+    else                    state.customBody = item.body;
+    activeFavId = id;
+    renderFavs();
+    applyCustomCode();
+    // applyCustomCode -> setActive -> updateActiveTileClasses uses activeFavId,
+    // but if the favorite is brand-new (first load) the dock may not yet have a
+    // tile for it. rebuildDock keeps everything in sync.
+    rebuildDock();
+  }
+
+  favSaveBtn.addEventListener('click', saveCurrentAsFav);
+  renderFavs();
+
+  // Clear the "active favorite" indicator as soon as the user starts editing
+  // (so the chip doesn't keep pretending the textarea matches that saved body).
+  codeTA.addEventListener('input', () => {
+    if (activeFavId != null) {
+      const favs = loadFavs();
+      const f = favs.find(x => x.id === activeFavId);
+      if (!f || f.body !== codeTA.value || f.mode !== state.customMode) {
+        activeFavId = null;
+        renderFavs();
+        updateActiveTileClasses();
+      }
+    }
+  });
+
+  // ⌘/Ctrl + Enter inside the textarea = apply
+  codeTA.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      applyCustomCode();
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = codeTA.selectionStart, en = codeTA.selectionEnd;
+      codeTA.value = codeTA.value.slice(0, s) + '  ' + codeTA.value.slice(en);
+      codeTA.selectionStart = codeTA.selectionEnd = s + 2;
+    }
+  });
+
+  // ---------- quality menu ----------
+  const qBtn = document.getElementById('btn-quality');
+  const qWrap = document.getElementById('quality-wrap');
+  qBtn.addEventListener('click', (e) => { e.stopPropagation(); qWrap.classList.toggle('open'); markQualityChecked(); });
+  document.getElementById('quality-menu').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.quality = parseFloat(b.dataset.q);
+    qWrap.classList.remove('open');
+    resize();
+    markQualityChecked();
+  });
+  function markQualityChecked() {
+    document.querySelectorAll('#quality-menu button').forEach(b => {
+      b.classList.toggle('checked', parseFloat(b.dataset.q) === state.quality);
+    });
+  }
+
+  // ---------- overlay toggle ----------
+  const ovBtn = document.getElementById('btn-overlay');
+  ovBtn.addEventListener('click', () => {
+    document.body.classList.toggle('no-overlay');
+    ovBtn.classList.toggle('active', !document.body.classList.contains('no-overlay'));
+  });
+
+  // ---------- capture menu ----------
+  const capBtn = document.getElementById('btn-capture');
+  const capWrap = document.getElementById('capture-wrap');
+  let capturing = false;
+  capBtn.addEventListener('click', (e) => { e.stopPropagation(); capWrap.classList.toggle('open'); });
+  document.getElementById('capture-menu').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    capWrap.classList.remove('open');
+    captureAt(parseInt(b.dataset.w, 10), parseInt(b.dataset.h, 10));
+  });
+
+  function captureP5At(width, height) {
+    if (capturing || typeof p5 === 'undefined') return;
+    // Full-sketch mode: the user picked their own canvas resolution; just
+    // snapshot the live canvas at its native dimensions.
+    if (p5SketchMode) {
+      if (!p5Instance || !p5Instance.canvas) return;
+      capturing = true;
+      capBtn.classList.add('active');
+      try {
+        p5Instance.canvas.toBlob(blob => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `venue-custom-p5-${p5Instance.width}x${p5Instance.height}.png`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }
+          capBtn.classList.remove('active');
+          capturing = false;
+        }, 'image/png');
+      } catch (e) {
+        console.error('p5 sketch capture failed:', e);
+        capBtn.classList.remove('active');
+        capturing = false;
+      }
+      return;
+    }
+    // Draw-body mode: spin up a fresh instance at the requested resolution
+    if (!p5UserDraw) return;
+    capturing = true;
+    capBtn.classList.add('active');
+    const tmpDiv = document.createElement('div');
+    tmpDiv.style.cssText = 'position:fixed;left:-99999px;top:-99999px;width:1px;height:1px;overflow:hidden;';
+    document.body.appendChild(tmpDiv);
+    let done = false;
+    const finish = (canvasEl) => {
+      if (done) return;
+      done = true;
+      try {
+        canvasEl.toBlob(blob => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `venue-custom-p5-${width}x${height}.png`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }
+          tmpInst.remove();
+          tmpDiv.remove();
+          capBtn.classList.remove('active');
+          capturing = false;
+        }, 'image/png');
+      } catch (e) {
+        console.error('p5 capture failed:', e);
+        tmpInst.remove();
+        tmpDiv.remove();
+        capBtn.classList.remove('active');
+        capturing = false;
+      }
+    };
+    const tmpInst = new p5((p) => {
+      p.setup = () => {
+        p.createCanvas(width, height);
+        p.pixelDensity(1);
+        p.noLoop();
+      };
+      p.draw = () => {
+        try {
+          const cl = state.clicks.map(c => ({
+            x: c.vx != null ? c.vx : 0.5,
+            y: c.vy != null ? c.vy : 0.5,
+            t: c.t,
+          }));
+          p5UserDraw(p, cl);
+        } catch (e) { console.error('p5 capture draw:', e); }
+        // capture on next tick so the draw call is fully flushed
+        setTimeout(() => finish(p.canvas), 30);
+      };
+    }, tmpDiv);
+  }
+
+  function captureAt(width, height) {
+    if (capturing) return;
+    if (state.activeIdx === CUSTOM_IDX && state.customMode === 'p5') {
+      return captureP5At(width, height);
+    }
+    capturing = true;
+    capBtn.classList.add('active');
+    setTimeout(() => {
+      try {
+        const off = document.createElement('canvas');
+        off.width = width; off.height = height;
+        const ogl = off.getContext('webgl', { antialias: false, preserveDrawingBuffer: true });
+        if (!ogl) throw new Error('no offscreen webgl');
+        const ovs = ogl.createShader(ogl.VERTEX_SHADER);
+        ogl.shaderSource(ovs, document.getElementById('vertex-shader').textContent);
+        ogl.compileShader(ovs);
+        const ofs = ogl.createShader(ogl.FRAGMENT_SHADER);
+        ogl.shaderSource(ofs, buildFragmentSrc(state.customBody,
+          state.entrance.shaderId === 'fav' ? state.entrance.shaderBody : ''));
+        ogl.compileShader(ofs);
+        if (!ogl.getShaderParameter(ofs, ogl.COMPILE_STATUS)) throw new Error('fs compile: ' + ogl.getShaderInfoLog(ofs));
+        const op = ogl.createProgram();
+        ogl.attachShader(op, ovs); ogl.attachShader(op, ofs);
+        ogl.bindAttribLocation(op, 0, 'a_pos');
+        ogl.linkProgram(op);
+        if (!ogl.getProgramParameter(op, ogl.LINK_STATUS)) throw new Error('link fail: ' + ogl.getProgramInfoLog(op));
+        ogl.useProgram(op);
+        const ob = ogl.createBuffer();
+        ogl.bindBuffer(ogl.ARRAY_BUFFER, ob);
+        ogl.bufferData(ogl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), ogl.STATIC_DRAW);
+        ogl.enableVertexAttribArray(0);
+        ogl.vertexAttribPointer(0, 2, ogl.FLOAT, false, 0, 0);
+        ogl.viewport(0, 0, width, height);
+        const now = (performance.now() / 1000) - state.startTime;
+        const u = {
+          res:        ogl.getUniformLocation(op, 'u_res'),
+          time:       ogl.getUniformLocation(op, 'u_time'),
+          mouseDir:   ogl.getUniformLocation(op, 'u_mouseDir'),
+          mouseValid: ogl.getUniformLocation(op, 'u_mouseValid'),
+          clicks:     ogl.getUniformLocation(op, 'u_clicks'),
+          clickCount: ogl.getUniformLocation(op, 'u_clickCount'),
+          shaderId:   ogl.getUniformLocation(op, 'u_shaderId'),
+          entMode:     ogl.getUniformLocation(op, 'u_entranceMode'),
+          entColor:    ogl.getUniformLocation(op, 'u_entranceColor'),
+          entTex:      ogl.getUniformLocation(op, 'u_entranceTex'),
+          entShaderId: ogl.getUniformLocation(op, 'u_entranceShaderId'),
+          entImgScale: ogl.getUniformLocation(op, 'u_entranceImageScale'),
+          entImgRot:   ogl.getUniformLocation(op, 'u_entranceImageRot'),
+          entImgAspect:ogl.getUniformLocation(op, 'u_entranceImageAspect'),
+        };
+        // Pass the actual offscreen canvas size as u_res; the shader's main()
+        // rescales gl_FragCoord into venue (2688×3840) space, so the hardcoded
+        // R_* rects stay valid at any capture resolution.
+        ogl.uniform2f(u.res, width, height);
+        ogl.uniform1f(u.time, now);
+        ogl.uniform3f(u.mouseDir, state.mouseDirSmoothed[0], state.mouseDirSmoothed[1], state.mouseDirSmoothed[2]);
+        ogl.uniform1f(u.mouseValid, state.mouseValid);
+        ogl.uniform1i(u.shaderId, state.activeIdx);
+
+        // Entrance uniforms — replicate state into the offscreen GL context.
+        ogl.uniform1i(u.entMode, modeToInt(state.entrance.mode));
+        const ergb = hexToRGB(state.entrance.color);
+        ogl.uniform3f(u.entColor, ergb[0], ergb[1], ergb[2]);
+        ogl.uniform1i(u.entShaderId, entranceShaderIdToInt(state.entrance.shaderId));
+        ogl.uniform1f(u.entImgScale,  state.entrance.imageScale  || 1.0);
+        ogl.uniform1f(u.entImgRot,    (state.entrance.imageRot || 0) * Math.PI / 180);
+        ogl.uniform1f(u.entImgAspect, state.entrance.imageAspect || 1.0);
+        // Offscreen entrance texture (always create one so the sampler binds cleanly)
+        const oTex = ogl.createTexture();
+        ogl.activeTexture(ogl.TEXTURE1);
+        ogl.bindTexture(ogl.TEXTURE_2D, oTex);
+        ogl.texImage2D(ogl.TEXTURE_2D, 0, ogl.RGBA, 1, 1, 0, ogl.RGBA, ogl.UNSIGNED_BYTE,
+          new Uint8Array([0, 0, 0, 255]));
+        ogl.texParameteri(ogl.TEXTURE_2D, ogl.TEXTURE_MIN_FILTER, ogl.LINEAR);
+        ogl.texParameteri(ogl.TEXTURE_2D, ogl.TEXTURE_MAG_FILTER, ogl.LINEAR);
+        ogl.texParameteri(ogl.TEXTURE_2D, ogl.TEXTURE_WRAP_S, ogl.CLAMP_TO_EDGE);
+        ogl.texParameteri(ogl.TEXTURE_2D, ogl.TEXTURE_WRAP_T, ogl.CLAMP_TO_EDGE);
+        ogl.uniform1i(u.entTex, 1);
+        ogl.activeTexture(ogl.TEXTURE0);
+        // If user is in image mode, draw the actual image into the offscreen texture.
+        // The image element is cached on the main entrance state (loaded lazily).
+        if (state.entrance.mode === 'image' && state.entrance._cachedImg) {
+          try {
+            const eimg = state.entrance._cachedImg;
+            ogl.activeTexture(ogl.TEXTURE1);
+            ogl.bindTexture(ogl.TEXTURE_2D, oTex);
+            ogl.pixelStorei(ogl.UNPACK_FLIP_Y_WEBGL, false);
+            ogl.texImage2D(ogl.TEXTURE_2D, 0, ogl.RGBA, ogl.RGBA, ogl.UNSIGNED_BYTE, eimg);
+            ogl.activeTexture(ogl.TEXTURE0);
+          } catch(e) { console.warn('capture: entrance image upload:', e); }
+        }
+        const arr = new Float32Array(32);
+        for (let i = 0; i < state.clicks.length; i++) {
+          arr[i*4+0] = state.clicks[i].dir[0];
+          arr[i*4+1] = state.clicks[i].dir[1];
+          arr[i*4+2] = state.clicks[i].dir[2];
+          arr[i*4+3] = state.clicks[i].t;
+        }
+        ogl.uniform4fv(u.clicks, arr);
+        ogl.uniform1i(u.clickCount, state.clicks.length);
+        ogl.drawArrays(ogl.TRIANGLES, 0, 3);
+        off.toBlob(blob => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `venue-${SHADERS[state.activeIdx].id}-${width}x${height}.png`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }
+          capBtn.classList.remove('active');
+          capturing = false;
+        }, 'image/png');
+      } catch (err) {
+        console.error('capture failed:', err);
+        capBtn.classList.remove('active');
+        capturing = false;
+      }
+    }, 30);
+  }
+
+  // ---------- entrance background picker ----------
+  const entBtn       = document.getElementById('btn-entrance');
+  const entWrap      = document.getElementById('entrance-wrap');
+  const entModeBtns  = document.querySelectorAll('#ent-modes button');
+  const entColorIn   = document.getElementById('ent-color');
+  const entFileIn    = document.getElementById('ent-image-file');
+  const entPreview   = document.getElementById('ent-image-preview');
+  const entClearBtn  = document.getElementById('ent-image-clear');
+  const entShaderSel = document.getElementById('ent-shader-pick');
+  const entImgScale  = document.getElementById('ent-image-scale');
+  const entImgScaleV = document.getElementById('ent-image-scale-val');
+  const entImgRot    = document.getElementById('ent-image-rot');
+  const entImgRotV   = document.getElementById('ent-image-rot-val');
+  const entImgReset  = document.getElementById('ent-image-reset');
+
+  entBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    entWrap.classList.toggle('open');
+  });
+
+  function refreshEntranceUI() {
+    entBtn.classList.toggle('active', state.entrance.mode !== 'none');
+    entModeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === state.entrance.mode));
+    document.querySelectorAll('.entrance-menu .ent-body').forEach(el => {
+      el.style.display = (el.dataset.body === state.entrance.mode) ? '' : 'none';
+    });
+    entColorIn.value = state.entrance.color;
+
+    // Image transform controls
+    const scl = state.entrance.imageScale != null ? state.entrance.imageScale : 1;
+    const rot = state.entrance.imageRot   != null ? state.entrance.imageRot   : 0;
+    entImgScale.value  = scl;
+    entImgScaleV.value = scl.toFixed(2);
+    entImgRot.value    = rot;
+    entImgRotV.value   = rot;
+
+    // Rebuild the shader dropdown from current favorites (GLSL only)
+    entShaderSel.innerHTML = '';
+    const optA = new Option('Aurora', 'aurora');
+    const optC = new Option('Custom (current code)', 'custom');
+    entShaderSel.add(optA);
+    entShaderSel.add(optC);
+    let favs = [];
+    try { favs = loadFavs().filter(f => f.mode === 'glsl'); } catch (e) {}
+    if (favs.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = '★ Saved favorites';
+      favs.forEach(f => {
+        grp.appendChild(new Option(f.name, 'fav:' + f.id));
+      });
+      entShaderSel.appendChild(grp);
+    }
+    // Select the right option based on state
+    let selVal = state.entrance.shaderId;
+    if (selVal === 'fav') {
+      selVal = 'fav:' + (state.entrance.shaderFavId || '');
+      // If the saved favorite no longer exists in localStorage we still keep
+      // the body in state.entrance.shaderBody — surface it as a dangling
+      // "(saved snippet)" option so the user can re-pick or clear it.
+      if (state.entrance.shaderFavId &&
+          !favs.find(f => f.id === state.entrance.shaderFavId)) {
+        const o = new Option('(saved snippet: ' + (state.entrance.shaderName || 'unnamed') + ')',
+                             'fav:' + state.entrance.shaderFavId);
+        entShaderSel.appendChild(o);
+      }
+    }
+    entShaderSel.value = selVal;
+
+    if (state.entrance.imageDataUrl) {
+      entPreview.src = state.entrance.imageDataUrl;
+      entPreview.classList.add('has-image');
+    } else {
+      entPreview.removeAttribute('src');
+      entPreview.classList.remove('has-image');
+    }
+  }
+
+  function setEntranceMode(m) {
+    state.entrance.mode = m;
+    saveEntranceState();
+    refreshEntranceUI();
+  }
+
+  entModeBtns.forEach(b => b.addEventListener('click', () => setEntranceMode(b.dataset.mode)));
+  entColorIn.addEventListener('input', () => {
+    state.entrance.color = entColorIn.value;
+    if (state.entrance.mode !== 'color') setEntranceMode('color');
+    else saveEntranceState();
+  });
+  entShaderSel.addEventListener('change', () => {
+    const v = entShaderSel.value;
+    if (v.startsWith('fav:')) {
+      const favId = v.slice(4);
+      const fav = loadFavs().find(f => f.id === favId && f.mode === 'glsl');
+      if (!fav) {
+        alert('That saved snippet is no longer available.');
+        return;
+      }
+      state.entrance.shaderId    = 'fav';
+      state.entrance.shaderFavId = fav.id;
+      state.entrance.shaderName  = fav.name;
+      state.entrance.shaderBody  = fav.body;
+      // Recompile main program so shaderEntrance contains the favorite's body
+      if (!recompileMainWithEntrance()) {
+        // Fall back to Aurora on compile failure
+        state.entrance.shaderId = 'aurora';
+        state.entrance.shaderBody = '';
+        state.entrance.shaderFavId = null;
+        state.entrance.shaderName = '';
+      }
+    } else {
+      state.entrance.shaderId    = v;       // 'aurora' or 'custom'
+      state.entrance.shaderBody  = '';
+      state.entrance.shaderFavId = null;
+      state.entrance.shaderName  = '';
+      // Recompile so the no-op shaderEntrance replaces any stale fav body
+      // (keeps the program size minimal when not using a favorite).
+      recompileMainWithEntrance();
+    }
+    if (state.entrance.mode !== 'shader') setEntranceMode('shader');
+    else { saveEntranceState(); refreshEntranceUI(); }
+  });
+
+  entFileIn.addEventListener('change', () => {
+    const f = entFileIn.files && entFileIn.files[0];
+    if (!f) return;
+    // Read as data URL so we can persist + reload the picked image
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = r.result;
+      const img = new Image();
+      img.onload = () => {
+        if (uploadEntranceImage(img)) {
+          // Reset scale/rotation so the new image shows in its natural pose.
+          state.entrance.imageScale = 1.0;
+          state.entrance.imageRot   = 0;
+          // Persist a *downscaled* version so localStorage doesn't blow up on
+          // multi-MB camera shots. Cap at 1024px on the long edge.
+          const max = 1024;
+          let w = img.width, h = img.height;
+          if (w > max || h > max) {
+            const s = max / Math.max(w, h);
+            w = Math.round(w * s); h = Math.round(h * s);
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            tmp.getContext('2d').drawImage(img, 0, 0, w, h);
+            state.entrance.imageDataUrl = tmp.toDataURL('image/jpeg', 0.9);
+          } else {
+            state.entrance.imageDataUrl = dataUrl;
+          }
+          state.entrance._cachedImg = img;
+          setEntranceMode('image');
+        }
+      };
+      img.onerror = () => alert('Could not load that image.');
+      img.src = dataUrl;
+    };
+    r.onerror = () => alert('Could not read that file.');
+    r.readAsDataURL(f);
+  });
+
+  entClearBtn.addEventListener('click', () => {
+    state.entrance.imageDataUrl = null;
+    state.entrance._cachedImg = null;
+    entFileIn.value = '';
+    // Reset the 1×1 texture so leftover pixels don't show if the user
+    // switches back to image mode later.
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, entranceTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 255]));
+    gl.activeTexture(gl.TEXTURE0);
+    refreshEntranceUI();
+    saveEntranceState();
+  });
+
+  // Image scale — slider <-> number input stay in sync, both update state live.
+  function applyImageScale(raw) {
+    let s = parseFloat(raw);
+    if (!isFinite(s)) return;
+    s = Math.max(0.01, Math.min(10, s)); // clamp to a sane range
+    state.entrance.imageScale = s;
+    if (parseFloat(entImgScale.value)  !== s) entImgScale.value  = s;
+    if (parseFloat(entImgScaleV.value) !== s) entImgScaleV.value = s.toFixed(2);
+    saveEntranceState();
+  }
+  entImgScale.addEventListener('input',  () => applyImageScale(entImgScale.value));
+  entImgScaleV.addEventListener('input', () => applyImageScale(entImgScaleV.value));
+  entImgScaleV.addEventListener('change', () => applyImageScale(entImgScaleV.value));
+
+  // Image rotation — same two-way binding.
+  function applyImageRot(raw) {
+    let r = parseFloat(raw);
+    if (!isFinite(r)) return;
+    r = Math.max(-360, Math.min(360, r));
+    // Round to integer degrees for display consistency
+    r = Math.round(r);
+    state.entrance.imageRot = r;
+    // Slider only spans -180..180; clamp its visible value to that range.
+    const sliderVal = Math.max(-180, Math.min(180, r));
+    if (parseInt(entImgRot.value, 10)  !== sliderVal) entImgRot.value  = sliderVal;
+    if (parseInt(entImgRotV.value, 10) !== r)         entImgRotV.value = r;
+    saveEntranceState();
+  }
+  entImgRot.addEventListener('input',   () => applyImageRot(entImgRot.value));
+  entImgRotV.addEventListener('input',  () => applyImageRot(entImgRotV.value));
+  entImgRotV.addEventListener('change', () => applyImageRot(entImgRotV.value));
+  // Reset scale + rotation back to defaults
+  entImgReset.addEventListener('click', () => {
+    state.entrance.imageScale = 1.0;
+    state.entrance.imageRot   = 0;
+    refreshEntranceUI();
+    saveEntranceState();
+  });
+
+  refreshEntranceUI();
+
+  // close popovers on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#quality-wrap'))  qWrap.classList.remove('open');
+    if (!e.target.closest('#capture-wrap'))  capWrap.classList.remove('open');
+    if (!e.target.closest('#entrance-wrap')) entWrap.classList.remove('open');
+  });
+
+  // ---------- broadcast / OBS-Spout capture mode ----------
+  // Browsers can't natively send Spout (Spout = D3D11 shared texture, native
+  // Windows only), but we can present a clean 2688×3840 capture surface
+  // for OBS Browser Source, window-capture-to-Spout bridges, or virtual
+  // camera tools. Broadcast mode:
+  //   • hides all chrome
+  //   • collapses the letterbox (stage-inner fills the viewport)
+  //   • bumps render quality to full (1.0) so capture is at native pixels
+  //   • shows a small dismissable HUD that's outside the capture area
+  //     when the host viewport is sized to 2688:3840
+  const broadcastBtn = document.getElementById('btn-broadcast');
+  const broadcastHud = document.getElementById('broadcast-hud');
+  let _qualityBeforeBroadcast = null;
+  let _hudFadeTimer = null;
+
+  function setBroadcast(active) {
+    document.body.classList.toggle('broadcast', active);
+    broadcastBtn.classList.toggle('active', active);
+    if (active) {
+      // Bump quality to full on entering, restore on exit
+      if (_qualityBeforeBroadcast == null) _qualityBeforeBroadcast = state.quality;
+      state.quality = 1.0;
+      resize();
+      markQualityChecked();
+      // Auto-fade the HUD after 4s so it doesn't bleed into capture if
+      // the viewport accidentally includes it. The HUD still works on
+      // hover to confirm broadcast is on.
+      broadcastHud.classList.remove('faded');
+      if (_hudFadeTimer) clearTimeout(_hudFadeTimer);
+      _hudFadeTimer = setTimeout(() => broadcastHud.classList.add('faded'), 4000);
+    } else {
+      if (_qualityBeforeBroadcast != null) {
+        state.quality = _qualityBeforeBroadcast;
+        _qualityBeforeBroadcast = null;
+        resize();
+        markQualityChecked();
+      }
+      if (_hudFadeTimer) { clearTimeout(_hudFadeTimer); _hudFadeTimer = null; }
+    }
+  }
+
+  broadcastBtn.addEventListener('click', () => {
+    setBroadcast(!document.body.classList.contains('broadcast'));
+  });
+  // Right-click on broadcast btn = open a clean broadcast popup in a new tab,
+  // useful for Spout/NDI window-capture bridges (capture just that tab/window).
+  broadcastBtn.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const url = new URL(location.href);
+    url.searchParams.set('broadcast', '1');
+    url.searchParams.set('q', '1');
+    // Best-effort popup sized to the venue's aspect ratio so window-capture
+    // gets exactly the canvas with no chrome. Many browsers ignore this on
+    // newer/PWA contexts, but it's harmless when they do.
+    const w = 768, h = Math.round(768 * 3840 / 2688);
+    window.open(url.toString(), '_blank',
+      `popup=yes,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`);
+  });
+  broadcastHud.addEventListener('click', () => setBroadcast(false));
+
+  // ---------- external integration hooks ----------
+  // Expose the venue canvas + a captureStream() helper so tools that can
+  // consume WebRTC streams (virtual cameras, NDI bridges) can grab it.
+  // For real Spout output, the standard workflow is:
+  //   1. Add this page as an OBS "Browser Source", width=2688, height=3840,
+  //      url = file:///<path>/Shader Wallpapers Venue.html?broadcast=1
+  //   2. Install obs-spout2-plugin in OBS
+  //   3. Add a "Spout Output" filter to the Browser Source (or to the scene)
+  // Spout will then receive the venue canvas at native resolution.
+  try {
+    window.__venueCanvas = canvas;
+    window.__getVenueStream = (fps) => {
+      try { return canvas.captureStream(fps || 30); }
+      catch (e) { console.warn('captureStream failed:', e); return null; }
+    };
+  } catch (e) { /* ignore */ }
+
+  // ---------- URL params ----------
+  const params = new URLSearchParams(location.search);
+  if (params.has('clean') || params.has('broadcast')) {
+    // Defer one tick so resize() etc are all defined
+    requestAnimationFrame(() => setBroadcast(true));
+  }
+  if (params.has('shader')) {
+    const idx = SHADERS.findIndex(s => s.id === params.get('shader'));
+    if (idx >= 0) setActive(idx);
+  }
+  if (params.has('q')) {
+    const q = parseFloat(params.get('q'));
+    if (q > 0 && q <= 1) state.quality = q;
+  }
+  if (params.has('overlay')) {
+    if (params.get('overlay') === '0') {
+      document.body.classList.add('no-overlay');
+      ovBtn.classList.remove('active');
+    }
+  }
+
+  // ---------- keyboard ----------
+  window.addEventListener('keydown', e => {
+    // don't hijack typing in the code editor
+    if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      cycleDock(+1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      cycleDock(-1);
+    } else if (/^[1-9]$/.test(e.key)) {
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx < dockEntries.length) activateEntry(dockEntries[idx]);
+    } else if (e.key === 'o' || e.key === 'O') {
+      ovBtn.click();
+    } else if (e.key === 'c' || e.key === 'C') {
+      codeBtn.click();
+    } else if (e.key === 'b' || e.key === 'B') {
+      setBroadcast(!document.body.classList.contains('broadcast'));
+    } else if (e.key === 'Escape') {
+      if (document.body.classList.contains('broadcast')) setBroadcast(false);
+      else if (codePanel.classList.contains('open')) toggleCodePanel(false);
+    }
+  });
+
+  // ---------- boot ----------
+  resize();
+  buildOverlay();
+  rebuildDock();
+  setActive(0);
+  markQualityChecked();
+  // Synchronously paint at least one frame before handing off to RAF — if the
+  // tab loads in the background, the browser may delay our first RAF tick by
+  // many seconds, during which u_res would stay at 0 and the canvas would
+  // render solid black. Calling frame() directly guarantees uniforms get set
+  // and at least one good frame is drawn before any throttling kicks in.
+  // frame() itself chains the next requestAnimationFrame at its end.
+  frame(performance.now());
+})();
+</script>
+</body>
+</html>
