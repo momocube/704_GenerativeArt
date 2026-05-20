@@ -4035,14 +4035,16 @@ void main() {
       // multi-screen-window-placement explainer) only ever use the
       // bare form, and at least one Chrome build silently fails to
       // honor the `=true` variant.
+      // Match Chrome's official fullscreen-popup sample byte-for-byte —
+      // any extra features (menubar/toolbar/location/status) seem to
+      // make Chrome's parser drop the popup back into "windowed" mode.
       features =
         `left=${rect.left},top=${rect.top}` +
         `,width=${rect.width},height=${rect.height}` +
-        `,popup,fullscreen` +
-        `,menubar=no,toolbar=no,location=no,status=no`;
+        `,popup,fullscreen`;
     } else {
       const w = 768, h = Math.round(768 * 3840 / 2688);
-      features = `width=${w},height=${h},popup,menubar=no,toolbar=no,location=no,status=no`;
+      features = `width=${w},height=${h},popup`;
     }
     // Close any prior projector. Do NOT reuse the window name — Chrome's
     // fullscreen popup feature only honors `fullscreen=true` when opening
@@ -4142,9 +4144,32 @@ void main() {
     items.forEach(it => {
       const b = document.createElement('button');
       b.innerHTML = '<span>' + it.label + '</span><b>' + it.meta + '</b>';
-      b.addEventListener('click', () => {
+      b.addEventListener('click', async () => {
         _hideScreenPop();
-        _openProjectorAt(it.rect);
+        // Chrome's fullscreen-popup feature only engages when the
+        // window.open() call is inside the same user-gesture stack frame
+        // that *also* dereferences a ScreenDetailed. Re-resolving the
+        // screen here (instead of just using the cached rect) makes the
+        // gesture chain look identical to Chrome's official sample.
+        // getScreenDetails() with permission already granted resolves
+        // without UI and preserves the click's transient activation.
+        let useRect = it.rect;
+        if ('getScreenDetails' in window) {
+          try {
+            const det = await window.getScreenDetails();
+            const target = det.screens.find(s =>
+              s.availLeft === it.rect.left && s.availTop === it.rect.top);
+            if (target) {
+              useRect = {
+                left:   target.availLeft,
+                top:    target.availTop,
+                width:  target.availWidth,
+                height: target.availHeight,
+              };
+            }
+          } catch (e) { /* fall back to cached rect */ }
+        }
+        _openProjectorAt(useRect);
       });
       _screenPop.appendChild(b);
     });
