@@ -273,6 +273,18 @@
   }
   .dock .ico-btn:hover { background: rgba(244,246,250,0.08); color: var(--ink); }
   .dock .ico-btn.active { background: rgba(244,246,250,0.12); color: var(--ink); }
+  /* Broadcast button while a projector window is live — red so the user
+     can tell at a glance that a projection is currently running and that
+     clicking again will close it. */
+  .dock .ico-btn.projecting {
+    background: rgba(255, 80, 80, 0.20);
+    color: #ff7070;
+    box-shadow: 0 0 0 1px rgba(255, 80, 80, 0.35) inset;
+  }
+  .dock .ico-btn.projecting:hover {
+    background: rgba(255, 80, 80, 0.30);
+    color: #ff9595;
+  }
   .dock .ico-btn svg { width: 16px; height: 16px; }
 
   /* Quality + capture menus share popover style */
@@ -2163,8 +2175,18 @@ function draw() {
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 750);
   }
-  window.addEventListener('mousedown', e => { if (e.button === 0) spawnClick(e.clientX, e.clientY); });
-  window.addEventListener('touchstart', e => { if (e.touches.length) { const t = e.touches[0]; spawnClick(t.clientX, t.clientY); } }, { passive: true });
+  // Multi-touch: pointerdown fires once per pointer (one event per finger
+  // for touchscreens, one event per click for mouse / pen). Each event
+  // spawns its own ripple via spawnClick(), so simultaneous touches show
+  // up as simultaneous ripples — the shader's u_clicks[8] array already
+  // supports up to 8 concurrent ripples, so it's just a matter of feeding
+  // every pointer into spawnClick instead of only the first touch.
+  window.addEventListener('pointerdown', e => {
+    // Ignore right/middle mouse buttons. For touch + pen pointerType
+    // the `button` is 0 anyway, so they fall through.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    spawnClick(e.clientX, e.clientY);
+  });
 
   // ---------- resize ----------
   function resize() {
@@ -3998,8 +4020,30 @@ void main() {
     try { syncSend('close-projector', {}); } catch (e) { /* ignore */ }
   });
 
+  // Broadcast button = projector control.
+  //   • No active projection → opens the screen picker on left-click.
+  //   • Active projection    → button is red, left-click closes it.
+  // The old in-window broadcast (UI-hide on this same tab) is still
+  // available via the B key for quick OBS Browser Source capture.
+  function _isProjecting() {
+    return !!(_projectorWin && !_projectorWin.closed);
+  }
+  function _updateBroadcastBtnState() {
+    broadcastBtn.classList.toggle('projecting', _isProjecting());
+  }
+  // The user can manually close the projector window — poll so the
+  // button reverts from red without needing a controller-side action.
+  setInterval(_updateBroadcastBtnState, 1000);
   broadcastBtn.addEventListener('click', () => {
-    setBroadcast(!document.body.classList.contains('broadcast'));
+    if (_isProjecting()) {
+      try { _projectorWin.close(); } catch (e) { /* ignore */ }
+      try { syncSend('close-projector', {}); } catch (e) { /* ignore */ }
+      _projectorWin = null;
+      window.__704_projectorWin = null;
+      _updateBroadcastBtnState();
+      return;
+    }
+    _projectorMenuFromButton();
   });
   // Right-click on broadcast btn = open a clean projector window. If the
   // Window Management API is available + permitted we show a picker so the
@@ -4068,6 +4112,12 @@ void main() {
     // delivery channel (BroadcastChannel can be throttled for fullscreen
     // popups on a non-focused monitor; direct postMessage isn't).
     window.__704_projectorWin = _projectorWin;
+    // Repaint the broadcast button to its red "projecting" state. Defined
+    // later in this IIFE — guard against the symbol not being hoisted in
+    // some edge case (e.g., the picker fires before the button click
+    // handlers wire up at boot).
+    try { if (typeof _updateBroadcastBtnState === 'function') _updateBroadcastBtnState(); }
+    catch (e) { /* ignore */ }
     // IMPORTANT: do NOT call moveTo()/resizeTo() on the popup. Those
     // calls would force the window into "windowed" geometry and knock
     // OS-level fullscreen back out (toolbar reappears).
@@ -4221,10 +4271,8 @@ void main() {
     });
     _showScreenPop(items, broadcastBtn);
   }
-  broadcastBtn.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    _projectorMenuFromButton();
-  });
+  // (Right-click previously opened the picker; left-click does it now,
+  //  so the contextmenu handler is intentionally not registered.)
   broadcastHud.addEventListener('click', () => setBroadcast(false));
 
   // ---------- external integration hooks ----------
