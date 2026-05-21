@@ -3857,6 +3857,21 @@ void main() {
         // controller side: only answer the handshake
         if (msg.type === 'projector-ready') {
           syncSend('snapshot', _syncSnapshotPayload());
+          // Capability Delegation (Chrome 102+): pass our transient user
+          // activation from the picker click directly to the popup so it
+          // can call requestFullscreen() without needing the user to
+          // click *inside* the popup itself. This is the one reliable
+          // path to auto-fullscreen for cases where `fullscreen=true` in
+          // window.open is ignored.
+          const w = window.__704_projectorWin;
+          if (w && !w.closed) {
+            try {
+              w.postMessage(
+                { __704sync: true, type: 'delegate-fullscreen', payload: {} },
+                { targetOrigin: location.origin, delegate: 'fullscreen' }
+              );
+            } catch (e) { /* ignore — non-Chromium browser */ }
+          }
         }
         return;
       }
@@ -3928,6 +3943,17 @@ void main() {
           // down — get out of the way so we don't pile up orphan
           // popups on the user's other monitor.
           try { window.close(); } catch (e) { /* ignore */ }
+        } else if (type === 'delegate-fullscreen') {
+          // Controller delegated fullscreen capability to us. The
+          // delegation only carries one shot of activation — call
+          // requestFullscreen() synchronously with no await beforehand,
+          // otherwise the inherited activation gets consumed by the
+          // intermediate operation and fullscreen will fail.
+          try {
+            document.documentElement
+              .requestFullscreen({ navigationUI: 'hide' })
+              .catch(() => {});
+          } catch (e) { /* ignore */ }
         }
       } finally {
         _suspendSync = false;
