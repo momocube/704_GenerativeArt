@@ -1,0 +1,36 @@
+{
+  "name": "704-generative-art",
+  "version": "1.0.0",
+  "description": "Generative art controller and projector for venue 704.",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "tw.com.cybercube.704-generative-art",
+    "productName": "704 Generative Art",
+    "files": [
+      "index.html",
+      "README.md",
+      "electron/**/*",
+      "glsl_snippets/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "704-Generative-Art.exe"
+    }
+  },
+  "dependencies": {
+    "osc": "^2.4.5"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  }
+}

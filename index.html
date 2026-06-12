@@ -3841,6 +3841,9 @@ void main() {
   // _activeFavDirty tells the dock tile to show the unsaved-changes dot.
   let activeFavId = null;
   let _activeFavDirty = false;
+  // Hoisted alongside activeFavId so openFavMenu (a hoisted declaration
+  // that may be called during initial rebuildDock) never lands in the TDZ.
+  let _favMenuFavId = null;
   // Drag-reorder state for dock tiles. Entry IDs are "aurora" | "custom" |
   // "fav:<favId>". Module-scoped so it survives a rebuildDock() that may
   // happen during the drag (it normally doesn't, but be defensive).
@@ -4075,16 +4078,41 @@ void main() {
       tile.appendChild(star);
       tile.appendChild(makeOscBadge(oscIdx));
       tile.title = `★ ${f.name} (${f.mode.toUpperCase()}) — click: 載入 · 雙擊: 載入並開啟編輯器 · 右鍵: 重新命名 / 刪除 · 拖曳: 改順序`;
-      tile.addEventListener('click', () => loadFav(f.id));
+      // Manual click / dblclick discrimination — the native `dblclick` event
+      // is flaky on draggable=true elements (drag start swallows the second
+      // press) and the previous handlers therefore appeared dead. We track
+      // the last click time per tile and treat a second click within 400ms
+      // as a double-click (load + open editor); a lone click loads as before.
+      let _lastClickT = 0;
+      let _singleClickTimer = null;
+      tile.addEventListener('click', (e) => {
+        const now = Date.now();
+        if (now - _lastClickT < 400) {
+          if (_singleClickTimer) { clearTimeout(_singleClickTimer); _singleClickTimer = null; }
+          _lastClickT = 0;
+          loadFav(f.id);
+          if (typeof toggleCodePanel === 'function') toggleCodePanel(true);
+          return;
+        }
+        _lastClickT = now;
+        _singleClickTimer = setTimeout(() => {
+          _singleClickTimer = null;
+          loadFav(f.id);
+        }, 220);
+      });
+      // Right-click → open context menu. Bound to `mousedown` (button 2) and
+      // `contextmenu` for maximum coverage; Electron sometimes drops one or
+      // the other depending on the active modal / drag state.
+      const openMenuAt = (clientX, clientY) => openFavMenu(f.id, clientX, clientY);
       tile.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        openFavMenu(f.id, e.clientX, e.clientY);
+        openMenuAt(e.clientX, e.clientY);
       });
-      tile.addEventListener('dblclick', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        loadFav(f.id);
-        if (typeof toggleCodePanel === 'function') toggleCodePanel(true);
+      tile.addEventListener('mousedown', (e) => {
+        if (e.button === 2) {
+          e.preventDefault();
+          openMenuAt(e.clientX, e.clientY);
+        }
       });
       attachDragHandlers(tile, entryId);
       dock.insertBefore(tile, sep);
@@ -4932,7 +4960,7 @@ void main() {
   // binds its buttons to the current fav id. closeFavMenu hides it again.
   // Dismissed by Escape, by clicking outside the menu, by scrolling, or by
   // resizing — anything that could move the anchored tile out from under it.
-  let _favMenuFavId = null;
+  // (_favMenuFavId is declared up at the top of the IIFE alongside activeFavId.)
   function openFavMenu(favId, x, y) {
     const m = document.getElementById('fav-context-menu');
     if (!m) return;
