@@ -26,6 +26,13 @@
     font-family: 'Inter', system-ui, sans-serif;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    /* Disable browser-level touch gestures (pan, pinch-zoom, double-tap-
+       zoom). On the venue touch screen we need every finger to fire its
+       own pointerdown — without this the browser swallows simultaneous
+       touches as "scroll" / "zoom" and we lose ripples. */
+    touch-action: none;
+    -ms-touch-action: none;
+    overscroll-behavior: none;
   }
 
   /* Venue stage: portrait 2688:3840 = 7:10. Letterboxed in viewport. */
@@ -49,6 +56,7 @@
     display: block;
     cursor: crosshair;
     image-rendering: pixelated;
+    touch-action: none;
   }
 
   /* Face label overlay (positioned in % of stage-inner; matches venue rects) */
@@ -154,6 +162,126 @@
     box-shadow: 0 0 8px #6f6;
   }
   .sys-pill .sep { color: var(--ink-faint); }
+  /* TouchService WS status — green when connected, dimmed amber when not. */
+  .sys-pill #ws-status {
+    cursor: default;
+  }
+  .sys-pill #ws-status.on    { color: #a4f0b0; text-shadow: 0 0 6px rgba(120,255,160,0.25); }
+  .sys-pill #ws-status.off   { color: #f0b87a; }
+  /* Mouse-fallback toggle — click to switch on/off. */
+  .sys-pill #mouse-toggle {
+    cursor: pointer;
+    transition: color 0.15s ease, opacity 0.15s ease;
+  }
+  .sys-pill #mouse-toggle:hover { color: var(--ink); }
+  .sys-pill #mouse-toggle.on  { color: var(--ink-dim); opacity: 1; }
+  .sys-pill #mouse-toggle.off { color: var(--ink-faint); opacity: 0.7; text-decoration: line-through; }
+  /* Sensor-lock toggle — bright red when calibration mode is active. */
+  .sys-pill #lock-toggle {
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .sys-pill #lock-toggle:hover { color: var(--ink); }
+  .sys-pill #lock-toggle.active { color: #ff8a8a; text-shadow: 0 0 6px rgba(255,120,120,0.35); }
+  /* Lights up amber whenever an event was just filtered — visible feedback
+     that the lock filter is doing its job. */
+  .sys-pill #lock-toggle.filtering { color: #ffc26b; text-shadow: 0 0 8px rgba(255,180,80,0.55); }
+
+  /* Sensor-lock canvas — pinned over the venue stage, transparent so the
+     live shader shows through. Hidden until the operator toggles lock mode.
+     Projector / broadcast view never sees it (controller-only diagnostic). */
+  #lock-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    pointer-events: auto;                  /* absorbs clicks while open */
+    cursor: crosshair;
+    z-index: 4;                            /* above bg + face-overlay (z 3) */
+  }
+  #lock-canvas.hidden { display: none; }
+  body.electron-projector #lock-canvas,
+  body.broadcast         #lock-canvas { display: none !important; }
+
+  /* Floating control card for calibration — lives in the LEFT letterbox so
+     the dock at the top never overlaps it. Controller window only. */
+  #lock-controls {
+    position: fixed;
+    top: 50%;
+    left: 24px;
+    transform: translateY(-50%);
+    z-index: 7;
+    width: 170px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 18px 16px;
+    background: rgba(14,16,22,0.82);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255,120,120,0.35);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px -14px rgba(0,0,0,0.75);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  #lock-controls.hidden { display: none; }
+  body.electron-projector #lock-controls,
+  body.broadcast         #lock-controls { display: none !important; }
+
+  #lock-controls .lc-title {
+    color: #ff9a9a;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 16px;
+    line-height: 1.1;
+    font-weight: 600;
+  }
+  #lock-controls .lc-sub {
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 9px;
+    margin-top: -6px;
+  }
+  #lock-controls .lc-stats {
+    color: var(--ink-dim);
+    line-height: 1.5;
+    padding: 8px 10px;
+    background: rgba(244,246,250,0.05);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  #lock-controls .lc-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  #lock-controls button {
+    appearance: none;
+    border: 1px solid var(--glass-edge);
+    background: rgba(14,16,22,0.6);
+    color: var(--ink-dim);
+    font: 500 11px/1.1 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.06em;
+    padding: 9px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  #lock-controls button:hover {
+    color: var(--ink);
+    border-color: var(--glass-edge-bright);
+  }
+  #lock-controls button.primary {
+    background: rgba(120,160,255,0.18);
+    color: #d8e4ff;
+    border-color: rgba(120,160,255,0.45);
+  }
+  #lock-controls button.primary:hover { background: rgba(120,160,255,0.30); }
 
   /* Bottom-right info */
   .info-card {
@@ -221,6 +349,51 @@
     box-shadow: 0 0 0 2px rgba(244,246,250,0.18);
     transform: translateY(-4px);
   }
+  /* Floating context menu for favorite-tile right-click. Positioned in JS. */
+  #fav-context-menu {
+    position: fixed;
+    z-index: 80;
+    min-width: 140px;
+    padding: 6px;
+    background: rgba(14,16,22,0.92);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid var(--glass-edge-bright);
+    border-radius: 10px;
+    box-shadow: 0 12px 36px -8px rgba(0,0,0,0.75);
+    display: flex; flex-direction: column;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+  }
+  #fav-context-menu.hidden { display: none; }
+  #fav-context-menu button {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  #fav-context-menu button:hover    { background: rgba(244,246,250,0.10); }
+  #fav-context-menu button.danger        { color: #ff9a9a; }
+  #fav-context-menu button.danger:hover  { background: rgba(255,120,120,0.15); color: #ffb0b0; }
+
+  /* Unsaved-edits indicator on the active favorite tile — a small amber dot
+     in the top-right so the operator sees "I changed this, Save will overwrite". */
+  .dock .tile.modified::after {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ffb84a;
+    box-shadow: 0 0 6px rgba(255,180,80,0.55);
+    pointer-events: none;
+  }
   .dock .tile canvas {
     width: 100%; height: 100%;
     display: block;
@@ -255,6 +428,88 @@
     color: #ffd984;
     text-shadow: 0 1px 3px rgba(0,0,0,0.7);
     pointer-events: none;
+  }
+  /* Drag-to-reorder visuals — every dock tile (Aurora, favorites, Custom)
+     can be dragged into any position. OSC index follows dock order. */
+  .dock .tile { cursor: grab; }
+  .dock .tile.drag-source {
+    opacity: 0.35;
+    cursor: grabbing;
+  }
+  .dock .tile.drag-over {
+    box-shadow: 0 0 0 2px rgba(170,238,255,0.85),
+                0 0 14px rgba(170,238,255,0.55);
+    transform: translateY(-4px);
+  }
+  /* OSC index badge — small integer overlaid on each tile that tells you
+     the value to send via /704/shader N. Recomputed on every dock change. */
+  .dock .tile .osc-idx {
+    position: absolute;
+    bottom: 16px;
+    right: 4px;
+    padding: 2px 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: #aef;
+    background: rgba(14,16,22,0.85);
+    border: 1px solid rgba(170,238,255,0.45);
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 2;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  }
+  .dock .tile.fav .osc-idx {
+    color: #ffd984;
+    border-color: rgba(255,220,130,0.55);
+    background: rgba(50,30,5,0.85);
+  }
+  /* Small "restore hidden" pill — shown next to the dock separator when at
+     least one built-in tile has been right-click-hidden. Click empties the
+     hidden list so Aurora / Custom come back. */
+  .dock .restore-hidden {
+    height: 36px;
+    padding: 0 10px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: rgba(255, 220, 130, 0.18);
+    color: #ffd984;
+    border: 1px solid rgba(255, 220, 130, 0.35);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .dock .restore-hidden:hover {
+    background: rgba(255, 220, 130, 0.28);
+  }
+  /* Small "GLSL" / "p5" tag in the tile's top-left corner so it's obvious
+     at a glance which renderer the effect uses (matters for favorites since
+     a user can save either GLSL fragments or p5 sketches). */
+  .dock .tile .type-badge {
+    position: absolute;
+    top: 3px; left: 4px;
+    padding: 1px 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px;
+    line-height: 1.3;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.92);
+    background: rgba(0,0,0,0.55);
+    border-radius: 3px;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  .dock .tile .type-badge.p5 {
+    color: #f4d4ff;
+    background: rgba(120, 40, 180, 0.7);
+  }
+  .dock .tile .type-badge.glsl {
+    color: #d4e6ff;
+    background: rgba(20, 60, 140, 0.7);
   }
   .dock .sep-vert {
     width: 1px; height: 32px;
@@ -341,6 +596,304 @@
   .pop-menu button.checked::before {
     content: "✓ ";
     color: #aef;
+  }
+
+  /* Inline prompt/confirm modal — replaces window.prompt() which Electron
+     disables by default. Reused for favorite save/rename/delete. */
+  .inline-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(5,6,10,0.55);
+    backdrop-filter: blur(6px) saturate(120%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .inline-modal-backdrop.open { opacity: 1; pointer-events: auto; }
+  .inline-modal {
+    min-width: 360px;
+    max-width: 480px;
+    padding: 18px 18px 14px;
+    background: rgba(14,16,22,0.96);
+    border: 1px solid var(--glass-edge);
+    border-radius: 12px;
+    box-shadow: 0 30px 80px -24px rgba(0,0,0,0.85);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    transform: translateY(10px);
+    transition: transform 0.18s cubic-bezier(0.2,0.8,0.2,1);
+  }
+  .inline-modal-backdrop.open .inline-modal { transform: translateY(0); }
+  .inline-modal .msg {
+    font-size: 13px;
+    color: var(--ink);
+    margin: 0 0 12px;
+    line-height: 1.45;
+    white-space: pre-line;
+  }
+  .inline-modal input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    margin: 0 0 12px;
+  }
+  .inline-modal input:focus { border-color: rgba(170,210,255,0.55); }
+  .inline-modal .row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .inline-modal button {
+    padding: 7px 14px;
+    background: rgba(244,246,250,0.08);
+    border: 1px solid var(--glass-edge);
+    border-radius: 7px;
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .inline-modal button:hover { background: rgba(244,246,250,0.16); }
+  .inline-modal button.primary {
+    background: rgba(120,170,255,0.22);
+    border-color: rgba(170,210,255,0.55);
+    color: #eaf2ff;
+  }
+  .inline-modal button.primary:hover { background: rgba(120,170,255,0.32); }
+  .inline-modal button.danger {
+    background: rgba(255,80,80,0.22);
+    border-color: rgba(255,140,140,0.55);
+    color: #ffd0d0;
+  }
+  .inline-modal button.danger:hover { background: rgba(255,80,80,0.32); }
+
+  /* OSC monitor / settings popup */
+  .pop-menu.osc-menu {
+    min-width: 340px;
+    max-width: 380px;
+    padding: 10px 12px 12px;
+  }
+  .osc-menu .osc-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+  }
+  .osc-menu .osc-pop-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(244,40,40,0.8);
+    box-shadow: 0 0 6px rgba(244,40,40,0.6);
+    flex-shrink: 0;
+  }
+  .osc-menu .osc-pop-dot.ok {
+    background: #6f6;
+    box-shadow: 0 0 8px #6f6;
+  }
+  .osc-menu .osc-log {
+    height: 160px;
+    overflow-y: auto;
+    margin: 6px 0 4px;
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    line-height: 1.55;
+  }
+  .osc-menu .osc-log-empty {
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+  .osc-menu .osc-log-row { padding: 0; }
+  .osc-menu .osc-log-row .ts {
+    color: var(--ink-faint);
+    margin-right: 6px;
+  }
+  .osc-menu .osc-log-row .addr { color: #aef; }
+  .osc-menu .osc-log-row .args { color: var(--ink-dim); }
+  .osc-menu .osc-actions {
+    display: flex;
+    gap: 6px;
+    margin: 4px 0;
+  }
+  .osc-menu .osc-btn {
+    flex: 1;
+    padding: 6px 8px;
+    background: rgba(244,246,250,0.06);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .osc-menu .osc-btn:hover {
+    background: rgba(244,246,250,0.12);
+    border-color: var(--glass-edge-bright);
+  }
+  .osc-menu .osc-btn.danger {
+    color: #ffb0b0;
+    border-color: rgba(255,80,80,0.45);
+  }
+  .osc-menu .osc-btn.danger:hover {
+    background: rgba(255,80,80,0.18);
+  }
+  .osc-menu .osc-section-title {
+    margin: 10px 0 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .osc-menu .osc-ref {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    line-height: 1.7;
+    padding: 2px 2px 0;
+  }
+  .osc-menu .osc-ref code {
+    color: #aef;
+    background: rgba(170,238,255,0.08);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  /* Playlist editor inside the OSC panel — one row per OSC slot. */
+  .osc-menu .osc-section-title.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .osc-menu .osc-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+  .osc-menu .osc-toggle input { margin: 0; cursor: pointer; }
+  .osc-menu .osc-toggle.active { color: #aef; }
+  .osc-menu .osc-toggle-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .osc-menu .pl-sync-banner {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: #aef;
+    background: rgba(170, 238, 255, 0.08);
+    border: 1px solid rgba(170, 238, 255, 0.20);
+    padding: 4px 6px;
+    margin: 0 0 6px;
+    border-radius: 5px;
+  }
+  .osc-menu .osc-playlist.synced .pl-select,
+  .osc-menu .osc-playlist.synced .pl-del { pointer-events: none; opacity: 0.55; }
+  .osc-menu .osc-playlist {
+    margin: 4px 0 6px;
+    padding: 6px 6px 4px;
+    background: rgba(0,0,0,0.30);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .osc-menu .osc-playlist.disabled { opacity: 0.45; }
+  .osc-menu .pl-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+  }
+  .osc-menu .pl-idx {
+    flex: 0 0 36px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.05em;
+  }
+  .osc-menu .pl-select {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    background: rgba(244,246,250,0.06);
+    border: 1px solid var(--glass-edge);
+    border-radius: 5px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    color-scheme: dark;
+  }
+  .osc-menu .pl-select option,
+  .osc-menu .pl-select optgroup {
+    background: #0e1016;
+    color: var(--ink);
+  }
+  .osc-menu .pl-del {
+    flex: 0 0 24px;
+    height: 24px;
+    border: 1px solid var(--glass-edge);
+    background: transparent;
+    color: var(--ink-faint);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    font-family: inherit;
+  }
+  .osc-menu .pl-del:hover {
+    background: rgba(255,80,80,0.18);
+    color: #ffb0b0;
+    border-color: rgba(255,140,140,0.55);
+  }
+  .osc-menu .pl-empty {
+    padding: 6px 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-align: center;
+    font-style: italic;
+  }
+  /* Dimmed OSC badge for tiles that are NOT in the active playlist
+     (playlist mode only). Stay visually present but obviously inactive. */
+  .dock .tile .osc-idx.off {
+    color: var(--ink-faint);
+    border-color: var(--glass-edge);
+    background: rgba(14,16,22,0.6);
+    opacity: 0.55;
+  }
+  .dock .tile.fav .osc-idx.off {
+    color: var(--ink-faint);
+    border-color: var(--glass-edge);
+    background: rgba(14,16,22,0.6);
   }
 
   /* Entrance background popup */
@@ -921,6 +1474,10 @@
     opacity: 0;
     pointer-events: none;
   }
+  body.electron-projector .projector-fullscreen-prompt,
+  body.electron-projector .broadcast-hud {
+    display: none !important;
+  }
 </style>
 </head>
 <body>
@@ -929,6 +1486,30 @@
       <canvas id="bg"></canvas>
       <canvas id="p5-canvas"></canvas>
       <div class="face-overlay" id="face-overlay"></div>
+      <!-- Sensor-lock overlay: a transparent canvas pinned over the venue
+           stage. Renders cell gridlines + hot cells + locked cells directly
+           on top of the live shader. Controller window only — projector
+           (`body.electron-projector`) and broadcast view hide it via CSS. -->
+      <canvas id="lock-canvas" class="hidden"></canvas>
+    </div>
+  </div>
+
+  <!-- Right-click context menu for favorite tiles (Rename / Delete).
+       Hidden by default; shown next to the cursor on contextmenu. -->
+  <div id="fav-context-menu" class="hidden" role="menu" aria-hidden="true">
+    <button type="button" data-act="rename" role="menuitem">Rename…</button>
+    <button type="button" data-act="delete" role="menuitem" class="danger">Delete</button>
+  </div>
+
+  <!-- Lock-mode control card — positioned in the left letterbox so the
+       dock at the top can never cover it. Controller window only. -->
+  <div id="lock-controls" class="hidden">
+    <span class="lc-title">SENSOR<br/>LOCK</span>
+    <span class="lc-sub">CALIBRATION</span>
+    <div class="lc-stats" id="lock-stats">0 locked<br/>0 hot</div>
+    <div class="lc-actions">
+      <button id="lock-clear" type="button">Clear All</button>
+      <button id="lock-done"  type="button" class="primary">Done · Esc</button>
     </div>
   </div>
 
@@ -943,7 +1524,7 @@
     </div>
     <div class="cp-hint" id="cp-hint-glsl">
       Write the body of <code>vec3 shaderCustom(vec3 dir)</code>. Must <b>return vec3</b>.<br/>
-      Available: <code>dir</code> (unit vec3 on sphere), <code>u_time</code>, <code>u_mouseDir</code>, <code>u_mouseValid</code>, <code>u_clicks[8]</code>, <code>u_clickCount</code>.<br/>
+      Available: <code>dir</code> (unit vec3 on sphere), <code>u_time</code>, <code>u_mouseDir</code>, <code>u_mouseValid</code>, <code>u_clicks[32]</code>, <code>u_clickCount</code>.<br/>
       Helpers: <code>fbm3(p)</code>, <code>vnoise3(p)</code>, <code>hash13(p)</code>, <code>hash33(p)</code>, <code>clickRipple(dir, freq, decayR, decaySpeed)</code>, <code>clickRing(dir, speed)</code>, palettes <code>paletteAurora(t)</code>, <code>neonPalette(t)</code>.
     </div>
     <div class="cp-hint" id="cp-hint-p5" style="display:none">
@@ -975,7 +1556,8 @@
     <div class="cp-foot">
       <div class="cp-status" id="cp-status">Ready. Press <b>Apply</b> or ⌘/Ctrl+Enter to compile.</div>
       <div class="cp-actions">
-        <button class="cp-btn" id="cp-reset">Reset</button>
+        <button class="cp-btn" id="cp-clear" title="清空編輯器(從零開始寫)">Clear</button>
+        <button class="cp-btn" id="cp-reset" title="載入預設範例">Reset</button>
         <button class="cp-btn primary" id="cp-apply">Apply</button>
       </div>
     </div>
@@ -994,7 +1576,16 @@
     <span id="fps">— fps</span>
     <span class="sep">/</span>
     <span>shader · <span id="shader-id">aurora</span></span>
+    <span class="sep">/</span>
+    <span id="osc-status" title="OSC receiver — TouchOSC etc. Send /704/shader N (int dock index), /704/shader/next, /704/shader/prev.">osc · —</span>
+    <span class="sep">/</span>
+    <span id="ws-status" class="off" title="TouchService WebSocket — venue floor touch input. Green = connected to ws://127.0.0.1:20111/, number = active touches.">touch · —</span>
+    <span class="sep">/</span>
+    <span id="mouse-toggle" class="on" title="Click to toggle mouse-fallback. ON = mouse clicks spawn ripples (useful for desk testing). OFF = only TouchService events count (recommended live).">mouse · on</span>
+    <span class="sep">/</span>
+    <span id="lock-toggle" title="Sensor lock calibration. Open → 空場待著，任何同肊的格子會被自動鎖。誤鎖的可以點掉解鎖。Done 退出後鎖格事件被忽略。">🔒 lock · 0</span>
   </div>
+
 
   <div class="info-card" id="info">
     <div class="eyebrow">Wallpaper <span class="idx">01</span> / <span class="total">02</span></div>
@@ -1089,6 +1680,62 @@
             <span>Shader</span>
             <select id="ent-shader-pick"></select>
           </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="pop-wrap" id="osc-wrap">
+      <button class="ico-btn" id="btn-osc" title="OSC monitor / dock 排序重設" aria-label="OSC monitor">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 9a15 15 0 0 1 20 0"/>
+          <path d="M5 12.5a10 10 0 0 1 14 0"/>
+          <path d="M8.5 16a5 5 0 0 1 7 0"/>
+          <circle cx="12" cy="19.5" r="1.4" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="pop-menu osc-menu" id="osc-menu">
+        <div class="head">OSC monitor</div>
+        <div class="osc-status-row">
+          <span class="osc-pop-dot" id="osc-pop-dot"></span>
+          <span id="osc-pop-text">offline</span>
+        </div>
+        <div class="osc-log" id="osc-log">
+          <div class="osc-log-empty">No messages yet — push a TouchOSC button.</div>
+        </div>
+        <div class="osc-actions">
+          <button class="osc-btn" id="osc-clear-log">Clear log</button>
+        </div>
+
+        <div class="osc-section-title row">
+          <span>Playlist</span>
+          <div class="osc-toggle-group">
+            <label class="osc-toggle" id="osc-playlist-sync-label" title="開啟後,在 dock 拖曳改順序時 playlist 會即時跟著更新,並自動啟用 playlist。關閉後可獨立編輯 playlist。">
+              <input type="checkbox" id="osc-playlist-sync"/>
+              <span>Sync from dock</span>
+            </label>
+            <label class="osc-toggle" id="osc-playlist-toggle-label" title="開啟後,/704/shader N 改成查 playlist 第 N 格,而不是 dock 第 N 格">
+              <input type="checkbox" id="osc-playlist-enable"/>
+              <span>Use playlist</span>
+            </label>
+          </div>
+        </div>
+        <div class="osc-playlist" id="osc-playlist">
+          <div class="pl-empty">No slots yet — click "+ Add" or "Copy from dock".</div>
+        </div>
+        <div class="osc-actions">
+          <button class="osc-btn" id="osc-playlist-add">+ Add slot</button>
+          <button class="osc-btn" id="osc-playlist-from-dock" title="把目前 dock 順序整個複製到 playlist">📋 Copy from dock</button>
+        </div>
+
+        <div class="osc-section-title">Dock</div>
+        <div class="osc-actions">
+          <button class="osc-btn" id="osc-reset-order" title="把 dock 順序還原成 Aurora → favs(存入時間)→ Custom。收藏不會被刪。">↻ 重設 dock 順序</button>
+        </div>
+        <div class="osc-section-title">Address reference</div>
+        <div class="osc-ref">
+          <div><code>/704/shader N</code> — int,切到 dock 第 N 格</div>
+          <div><code>/704/shader/next</code> — 下一個</div>
+          <div><code>/704/shader/prev</code> — 上一個</div>
         </div>
       </div>
     </div>
@@ -1208,8 +1855,12 @@ uniform vec2  u_res;          // canvas pixel size (matches venue 2688x3840 aspe
 uniform float u_time;
 uniform vec3  u_mouseDir;     // mouse projected to sphere direction (unit)
 uniform float u_mouseValid;   // 1 if mouse is over a face, 0 otherwise
-uniform vec4  u_clicks[8];    // xyz = dir, w = spawn time
+uniform vec4  u_clicks[32];   // xyz = dir, w = spawn time
 uniform int   u_clickCount;
+// Drag samples — recent ~1s of move events from TouchService (per-touch trail).
+// xyz = unit dir on sphere, w = sample time. Newest first; ages > 1s expire.
+uniform vec4  u_drags[32];
+uniform int   u_dragCount;
 uniform int   u_shaderId;     // 0..4
 uniform float u_showSlices;   // unused now (overlay is HTML)
 // Entrance background controls — lets the user replace the doorway tile
@@ -1302,11 +1953,11 @@ vec3 faceToDir(vec2 uv01, float yawDeg, float pitchDeg, float hfovDeg, float vfo
 }
 
 // ============= shared click ripple helper =============
-// returns the wave envelope at the given dir; loops over up to 8 clicks.
+// Loops over up to 32 active touch points (u_clicks is a 32-vec4 array).
 // freq, decayRadius, decaySpeed parameters tune the look.
 float clickRipple(vec3 dir, float freq, float decayRadius, float decaySpeed) {
   float ripple = 0.0;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 32; i++) {
     if (i >= u_clickCount) break;
     vec4 c = u_clicks[i];
     float cd = acos(clamp(dot(dir, c.xyz), -1.0, 1.0)); // angular dist on sphere
@@ -1321,7 +1972,7 @@ float clickRipple(vec3 dir, float freq, float decayRadius, float decaySpeed) {
 // returns vec2(ringStrength, traveling-radius age signal) — used by Vortex, Aurora.
 float clickRing(vec3 dir, float speed) {
   float ring = 0.0;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 32; i++) {
     if (i >= u_clickCount) break;
     vec4 c = u_clicks[i];
     float cd = acos(clamp(dot(dir, c.xyz), -1.0, 1.0));
@@ -1332,6 +1983,26 @@ float clickRing(vec3 dir, float speed) {
     }
   }
   return ring;
+}
+
+// ============= shared drag trail helper =============
+// Renders TouchService drag (move) samples as bright dots that fade in
+// ~`life` seconds. `tightness` controls the dot's angular radius — higher
+// = smaller / sharper points. Use this in your shader's color pass:
+//   col += dragTrail(dir, 1.0, 60.0) * vec3(1.0, 0.9, 0.5);
+float dragTrail(vec3 dir, float life, float tightness) {
+  float trail = 0.0;
+  for (int i = 0; i < 32; i++) {
+    if (i >= u_dragCount) break;
+    vec4 d = u_drags[i];
+    float cd = acos(clamp(dot(dir, d.xyz), -1.0, 1.0));
+    float age = u_time - d.w;
+    if (age >= 0.0 && age < life) {
+      // Sharp gaussian dot, fades out linearly over `life`.
+      trail += exp(-pow(cd * tightness, 2.0)) * (1.0 - age / life);
+    }
+  }
+  return trail;
 }
 
 // =====================================================================
@@ -1367,7 +2038,7 @@ vec3 shaderAurora(vec3 dir) {
   }
   float burst = clickRing(dir, 1.0);
   vec3 burstCol = vec3(0.0);
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 32; i++) {
     if (i >= u_clickCount) break;
     vec4 c = u_clicks[i];
     float cd = acos(clamp(dot(dir, c.xyz), -1.0, 1.0));
@@ -1395,6 +2066,11 @@ vec3 shaderAurora(vec3 dir) {
   vec3 bg = vec3(0.03, 0.02, 0.07);
   col = mix(bg, col, smoothstep(0.0, 0.30, bright + burst));
   col += 0.04;
+
+  // Drag trail — bright cyan/cream streaks where touches are moving now.
+  float dt = dragTrail(dir, 1.0, 60.0);
+  col += dt * vec3(0.7, 0.95, 1.0) * 1.4;
+
   return col;
 }
 
@@ -1563,6 +2239,11 @@ void main() {
   // event handlers that fire after init.
   const _projParams = new URLSearchParams(location.search);
   const IS_PROJECTOR = _projParams.has('broadcast') || _projParams.has('clean');
+  const IS_ELECTRON_PROJECTOR_PARAM = IS_PROJECTOR && _projParams.get('electron') === '1';
+  if (IS_ELECTRON_PROJECTOR_PARAM) {
+    document.body.classList.add('electron-projector');
+    document.querySelectorAll('.projector-fullscreen-prompt').forEach(el => el.remove());
+  }
   const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('704-projector-v1') : null;
   let _syncMouseLast = 0;
   let _suspendSync = false; // set while applying an incoming sync msg, so
@@ -1604,7 +2285,7 @@ void main() {
   // gesture". So we fall through to the one path that does work: the
   // first time the user clicks / touches / keys-in inside the popup,
   // we use that gesture to enter fullscreen.
-  if (IS_PROJECTOR && _projParams.get('fullscreen') === '1') {
+  if (IS_PROJECTOR && _projParams.get('fullscreen') === '1' && _projParams.get('electron') !== '1') {
     const wL = parseInt(_projParams.get('screen_left') || '', 10);
     const wT = parseInt(_projParams.get('screen_top')  || '', 10);
     let _fsTarget = null;
@@ -1801,6 +2482,8 @@ function draw() {
       mouseValid: gl.getUniformLocation(p, 'u_mouseValid'),
       clicks:     gl.getUniformLocation(p, 'u_clicks'),
       clickCount: gl.getUniformLocation(p, 'u_clickCount'),
+      drags:      gl.getUniformLocation(p, 'u_drags'),
+      dragCount:  gl.getUniformLocation(p, 'u_dragCount'),
       shaderId:   gl.getUniformLocation(p, 'u_shaderId'),
       entMode:     gl.getUniformLocation(p, 'u_entranceMode'),
       entColor:    gl.getUniformLocation(p, 'u_entranceColor'),
@@ -2031,6 +2714,29 @@ function draw() {
     mouseDirSmoothed: [0, 0, -1],
     mouseValid: 0,
     clicks: [],
+    // drags: recent move samples from TouchService (ring buffer, max 32).
+    // Each: { dir:[x,y,z], t:seconds-since-startTime, id:touchId }.
+    drags: [],
+    // Mouse fallback (滑鼠 fallback) — when true the existing pointerdown
+    // path is live; when false only TouchService WS triggers ripples.
+    // Lets the user run a venue laptop with mouse + real touch coexisting,
+    // or shut the mouse off during live shows. Persisted in localStorage.
+    mouseFallback: true,
+    // WebSocket connection state (purely display — the watchdog in
+    // TouchClient drives the actual reconnect).
+    wsConnected: false,
+    wsActiveTouches: 0,
+    // Sensor cell lock — filter out misfiring cells (stuck sensors, water
+    // damage, edge bleed) so they can't spawn phantom ripples.
+    //   lockedCells: Set<"faceIdx:col:row"> persisted to localStorage
+    //   recentEvents: ring of {key, t} for the last LOCK_HOT_WINDOW seconds,
+    //                 used to surface "hot" candidates while in lock mode
+    //   lockMode: while true, no ripples/drags spawn (calibration mode)
+    //   touchFaces: copy of the hello.faces array (per-face cell grid)
+    lockedCells: new Set(),
+    recentEvents: [],
+    lockMode: false,
+    touchFaces: null,
     startTime: performance.now() / 1000,
     customBody: DEFAULT_CUSTOM_BODY,
     p5Body: DEFAULT_P5_BODY,
@@ -2063,6 +2769,26 @@ function draw() {
       Object.assign(state.entrance, e);
     }
   } catch (e) { /* ignore */ }
+  // Restore mouse-fallback toggle.
+  try {
+    const v = localStorage.getItem('shaderWallpapers.venue.mouseFallback.v1');
+    if (v === '0') state.mouseFallback = false;
+    else if (v === '1') state.mouseFallback = true;
+  } catch (e) { /* ignore */ }
+  // Restore locked cells.
+  try {
+    const raw = localStorage.getItem('shaderWallpapers.venue.lockedCells.v1');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) state.lockedCells = new Set(arr.filter(s => typeof s === 'string'));
+    }
+  } catch (e) { /* ignore */ }
+  function persistLockedCells() {
+    try {
+      localStorage.setItem('shaderWallpapers.venue.lockedCells.v1',
+        JSON.stringify([...state.lockedCells]));
+    } catch (e) { /* ignore */ }
+  }
   // Restore the user's last GLSL + p5 code and the editor mode they
   // were in. Without this, every page reload silently throws away
   // whatever Custom shader / sketch they had been working on, which is
@@ -2191,11 +2917,18 @@ function draw() {
     const rect = canvas.getBoundingClientRect();
     if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
     const [px, py] = clientToVenuePx(clientX, clientY);
+    // Respect the sensor lock — desk-testing with a mouse should obey the
+    // same calibration the WS path does, otherwise the operator can't verify
+    // the filter is working without dragging a real foot onto the venue.
+    if (typeof venuePxToCellKey === 'function' && state.touchFaces) {
+      const hit2 = venuePxToCellKey(px, py);
+      if (hit2 && state.lockedCells.has(hit2.key)) { noteFiltered(); return; }
+    }
     const hit = pxToFaceDir(px, py);
     if (!hit || !hit.dir) return;
     const t = (performance.now() / 1000) - state.startTime;
     state.clicks.push({ dir: hit.dir, t, vx: px / VENUE_W, vy: py / VENUE_H });
-    if (state.clicks.length > 8) state.clicks.shift();
+    if (state.clicks.length > 32) state.clicks.shift();
     // Mirror click to projector — it'll spawn its own ripple at the same
     // venue-relative position so the wallpaper "responds" identically.
     syncSend('click', { dir: hit.dir, vx: px / VENUE_W, vy: py / VENUE_H });
@@ -2210,15 +2943,486 @@ function draw() {
   // Multi-touch: pointerdown fires once per pointer (one event per finger
   // for touchscreens, one event per click for mouse / pen). Each event
   // spawns its own ripple via spawnClick(), so simultaneous touches show
-  // up as simultaneous ripples — the shader's u_clicks[8] array already
-  // supports up to 8 concurrent ripples, so it's just a matter of feeding
-  // every pointer into spawnClick instead of only the first touch.
+  // up as simultaneous ripples — the shader's u_clicks[32] array supports
+  // up to 32 concurrent ripples for the venue touch-screen install (≥ 20
+  // fingers expected on stage at once).
   window.addEventListener('pointerdown', e => {
     // Ignore right/middle mouse buttons. For touch + pen pointerType
     // the `button` is 0 anyway, so they fall through.
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // Calibration mode swallows pointer events — clicks on the lock canvas
+    // are meant to toggle cells, not spawn ripples through the venue.
+    if (state.lockMode) return;
+    // Mouse-fallback toggle: when the operator switches it off, the local
+    // pointer path is muted so it can't accidentally fire ripples on top
+    // of real venue TouchService events. WS path is unaffected.
+    if (!state.mouseFallback) return;
     spawnClick(e.clientX, e.clientY);
-  });
+  }, { passive: true });
+
+  // ---------- TouchService WebSocket (replaces the Nangang-Unity simulated-mouse path) ----------
+  // Protocol: see MIGRATION-ART-APP.md. ws://127.0.0.1:20111/ pushes JSON
+  // frames; each `events[]` entry has phase ∈ {down,move,up}, px[2] in
+  // venue canvas pixel space (2688×3840 — matches our shader rects), plus
+  // an `alive[]` reconciliation list so dropped `up` frames can't strand
+  // touches as ghost ripples.
+  //
+  // Two visual channels, fed from the same WS stream:
+  //   down  → state.clicks  (existing u_clicks ripple)
+  //   move  → state.drags   (new u_drags trail, see dragTrail() in shader)
+  //
+  // Only the controller window runs the WS client. The projector window
+  // (IS_PROJECTOR === true) receives `click` and `drag` sync messages
+  // through BroadcastChannel and updates its own state to match.
+  // Cell-lock helpers — see state.lockedCells / state.recentEvents.
+  const LOCK_HOT_WINDOW = 10.0;          // seconds of recent activity to surface
+  const LOCK_RECENT_CAP = 4096;          // hard cap on ring buffer entries
+  function cellKey(faceIdx, col, row) { return faceIdx + ':' + col + ':' + row; }
+  function trackEvent(key) {
+    const t = (performance.now() / 1000) - state.startTime;
+    state.recentEvents.push({ key, t });
+    if (state.recentEvents.length > LOCK_RECENT_CAP) state.recentEvents.shift();
+  }
+  function pruneRecent() {
+    const t = (performance.now() / 1000) - state.startTime;
+    while (state.recentEvents.length && t - state.recentEvents[0].t > LOCK_HOT_WINDOW) {
+      state.recentEvents.shift();
+    }
+  }
+  // Auto-lock: while calibration mode is on, every cell that fires is
+  // immediately added to the locked set. The operator's job is just to
+  // stay off the venue, watch the lock count climb, and press Done. If
+  // anything got locked by mistake (e.g. someone stepped while leaving),
+  // they can click that cell to unlock before pressing Done.
+  function maybeAutoLock(key) {
+    if (!state.lockMode || !key) return;
+    if (state.lockedCells.has(key)) return;
+    state.lockedCells.add(key);
+    persistLockedCells();
+    updateLockPill();
+    // Render call is cheap, and immediate so the operator sees the cell
+    // turn solid red in real time as detections happen.
+    renderLockCanvas();
+  }
+  // Filter counter — bumps every time a locked cell rejects an event. Drives
+  // the (N) badge on the lock pill so the operator can verify the filter is
+  // actually active by watching the number tick up when they touch / mouse
+  // on a locked spot. Decays to 0 after ~5s of inactivity.
+  let _lockFilteredCount = 0;
+  let _lockFilteredFadeTimer = null;
+  function noteFiltered() {
+    _lockFilteredCount++;
+    if (_lockFilteredFadeTimer) clearTimeout(_lockFilteredFadeTimer);
+    _lockFilteredFadeTimer = setTimeout(() => {
+      _lockFilteredCount = 0;
+      updateLockPill();
+    }, 5000);
+    updateLockPill();
+  }
+
+  function spawnTouchFromPx(px, py, key) {
+    // Lock mode = calibration — no visuals spawn so the overlay reflects raw sensor data only.
+    if (state.lockMode) return null;
+    if (key && state.lockedCells.has(key)) { noteFiltered(); return null; }
+    const hit = pxToFaceDir(px, py);
+    if (!hit || !hit.dir) return null;
+    const t = (performance.now() / 1000) - state.startTime;
+    const vx = px / VENUE_W, vy = py / VENUE_H;
+    state.clicks.push({ dir: hit.dir, t, vx, vy });
+    if (state.clicks.length > 32) state.clicks.shift();
+    syncSend('click', { dir: hit.dir, vx, vy });
+    return hit.dir;
+  }
+  function pushDragFromPx(px, py, id, key) {
+    if (state.lockMode) return;
+    if (key && state.lockedCells.has(key)) { noteFiltered(); return; }
+    const hit = pxToFaceDir(px, py);
+    if (!hit || !hit.dir) return;
+    const t = (performance.now() / 1000) - state.startTime;
+    state.drags.push({ dir: hit.dir, t, id });
+    // Cap the buffer — frame loop ages out by time, this caps by count
+    // so a flurry of 60-point moves can't blow past the uniform array.
+    if (state.drags.length > 32) state.drags.shift();
+    syncSend('drag', { dir: hit.dir, t });
+  }
+
+  class TouchClient {
+    constructor(url, handlers = {}) {
+      this.url = url;
+      this.h = handlers;
+      this.touches = new Map();
+      this.hello = null;
+      this._lastMsg = 0;
+      this._closed = false;
+      this._connect();
+      // Watchdog: 3.5s without any frame ≈ keepalive missed × 3, force reconnect.
+      this._watchdog = setInterval(() => {
+        if (this._lastMsg && Date.now() - this._lastMsg > 3500) {
+          try { this._ws.close(); } catch (e) {}
+        }
+      }, 1000);
+    }
+    close() {
+      this._closed = true;
+      clearInterval(this._watchdog);
+      try { this._ws.close(); } catch (e) {}
+    }
+    _connect() {
+      let ws;
+      try { ws = new WebSocket(this.url); }
+      catch (e) {
+        // URL parse failure or block — retry after delay.
+        setTimeout(() => { if (!this._closed) this._connect(); }, 2000);
+        return;
+      }
+      this._ws = ws;
+      ws.onopen = () => { this.h.onOpen && this.h.onOpen(); };
+      ws.onmessage = (ev) => {
+        this._lastMsg = Date.now();
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        if (msg.type === 'hello') {
+          this.hello = msg;
+          this.h.onHello && this.h.onHello(msg);
+          return;
+        }
+        for (const e of (msg.events || [])) {
+          if (e.phase === 'up') {
+            this.touches.delete(e.id);
+            this.h.onUp && this.h.onUp(e.id);
+          } else {
+            this.touches.set(e.id, e);
+            if (e.phase === 'down') this.h.onDown && this.h.onDown(e);
+            else this.h.onMove && this.h.onMove(e);
+          }
+        }
+        // alive reconciliation — drop touches the server says are gone,
+        // even if we never received their `up`.
+        if (Array.isArray(msg.alive)) {
+          const alive = new Set(msg.alive);
+          for (const id of [...this.touches.keys()]) {
+            if (!alive.has(id)) {
+              this.touches.delete(id);
+              this.h.onUp && this.h.onUp(id);
+            }
+          }
+        }
+        this.h.onTick && this.h.onTick(this.touches.size);
+      };
+      ws.onclose = () => {
+        // Clear visible touches so nothing hangs as a ghost while we reconnect.
+        for (const id of [...this.touches.keys()]) {
+          this.touches.delete(id);
+          this.h.onUp && this.h.onUp(id);
+        }
+        this.h.onClose && this.h.onClose();
+        if (!this._closed) setTimeout(() => this._connect(), 2000);
+      };
+      ws.onerror = () => { try { ws.close(); } catch (e) {} };
+    }
+  }
+
+  // Controller window only — projector mirrors via syncSend.
+  if (!IS_PROJECTOR) {
+    const WS_URL = (window.__704_TOUCH_WS_URL) || 'ws://127.0.0.1:20111/';
+    new TouchClient(WS_URL, {
+      onOpen:  () => { state.wsConnected = true;  updateWsHud(); },
+      onClose: () => { state.wsConnected = false; state.wsActiveTouches = 0; updateWsHud(); },
+      onHello: (hello) => {
+        // Trust hello.canvas if it differs — but for 704 it should match VENUE_W/H.
+        if (hello && hello.canvas && (hello.canvas.w !== VENUE_W || hello.canvas.h !== VENUE_H)) {
+          console.warn('[TouchService] canvas size mismatch — venue', VENUE_W, 'x', VENUE_H,
+                       'vs hello', hello.canvas.w, 'x', hello.canvas.h);
+        }
+        // Stash the face-cell layout so the lock overlay can draw cells at
+        // their real (originX/Y, cellW/H) positions in canvas px space.
+        if (hello && Array.isArray(hello.faces)) state.touchFaces = hello.faces;
+      },
+      onDown: (e) => {
+        if (!e.px) return;
+        const key = (e.cell ? cellKey(e.face, e.cell[0], e.cell[1]) : null);
+        if (key) {
+          trackEvent(key);
+          maybeAutoLock(key);
+        }
+        spawnTouchFromPx(e.px[0], e.px[1], key);
+      },
+      onMove: (e) => {
+        if (!e.px) return;
+        const key = (e.cell ? cellKey(e.face, e.cell[0], e.cell[1]) : null);
+        if (key) {
+          trackEvent(key);
+          maybeAutoLock(key);
+        }
+        pushDragFromPx(e.px[0], e.px[1], e.id, key);
+      },
+      onUp:   () => { /* trail fades by time; nothing to clean */ },
+      onTick: (n) => { state.wsActiveTouches = n; updateWsHud(); },
+    });
+  }
+
+  function updateWsHud() {
+    const el = document.getElementById('ws-status');
+    if (!el) return;
+    if (state.wsConnected) {
+      el.classList.add('on'); el.classList.remove('off');
+      el.textContent = `touch · ${state.wsActiveTouches}`;
+    } else {
+      el.classList.add('off'); el.classList.remove('on');
+      el.textContent = 'touch · —';
+    }
+  }
+
+  function applyMouseFallbackHud() {
+    const el = document.getElementById('mouse-toggle');
+    if (!el) return;
+    if (state.mouseFallback) {
+      el.classList.add('on'); el.classList.remove('off');
+      el.textContent = 'mouse · on';
+    } else {
+      el.classList.add('off'); el.classList.remove('on');
+      el.textContent = 'mouse · off';
+    }
+  }
+  applyMouseFallbackHud();
+  {
+    const el = document.getElementById('mouse-toggle');
+    if (el && !IS_PROJECTOR) {
+      el.addEventListener('click', () => {
+        state.mouseFallback = !state.mouseFallback;
+        try { localStorage.setItem('shaderWallpapers.venue.mouseFallback.v1',
+                                    state.mouseFallback ? '1' : '0'); } catch (e) {}
+        applyMouseFallbackHud();
+      });
+    }
+  }
+
+  // ---------- sensor lock overlay (controller only) ----------
+  // The button text doubles as a counter ("🔒 lock · 3") so the operator can
+  // see at a glance how many cells are filtered without opening the overlay.
+  function updateLockPill() {
+    const pill = document.getElementById('lock-toggle');
+    if (!pill) return;
+    let txt = '🔒 lock · ' + state.lockedCells.size;
+    // Flash a filter counter so the operator can see the filter actively
+    // rejecting events on locked cells. The counter resets after 5s of no
+    // filtering, so it reads as a live indicator rather than a total.
+    if (_lockFilteredCount > 0) txt += ' ⊘' + _lockFilteredCount;
+    pill.textContent = txt;
+    pill.classList.toggle('active', state.lockMode);
+    pill.classList.toggle('filtering', _lockFilteredCount > 0);
+  }
+  updateLockPill();
+
+  // Map a venue-px click position to a cellKey using touchFaces from hello.
+  function venuePxToCellKey(vx, vy) {
+    if (!state.touchFaces) return null;
+    for (const f of state.touchFaces) {
+      if (vx >= f.originX && vx < f.originX + f.width &&
+          vy >= f.originY && vy < f.originY + f.height) {
+        const col = Math.floor((vx - f.originX) / f.cellW);
+        const row = Math.floor((vy - f.originY) / f.cellH);
+        return { key: cellKey(f.index, col, row), face: f, col, row };
+      }
+    }
+    return null;
+  }
+
+  // Render the lock overlay on top of the live shader — gridlines for every
+  // sensor cell + heat coloring + locked-cell badges. Transparent background
+  // so the venue's actual rendering remains visible underneath.
+  let _lockRenderTimer = null;
+  function renderLockCanvas() {
+    const cv = document.getElementById('lock-canvas');
+    if (!cv) return;
+    if (cv.width !== VENUE_W || cv.height !== VENUE_H) {
+      cv.width = VENUE_W; cv.height = VENUE_H;
+    }
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, VENUE_W, VENUE_H);
+
+    // Face frames (matches the dashed face-overlay so the operator's eye
+    // can lock onto Wall Left / Floor / etc. while reading the grid).
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.42)';
+    for (const f of FACES) ctx.strokeRect(f.x, f.y, f.w, f.h);
+
+    // Gridlines for every sensor cell (only when TouchService said hello —
+    // before that we don't know cell sizes). Drawn in a single Path2D per
+    // face so even 20×128 walls are cheap.
+    if (state.touchFaces) {
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+      for (const f of state.touchFaces) {
+        const p = new Path2D();
+        // Vertical lines
+        for (let c = 0; c <= f.cols; c++) {
+          const x = f.originX + c * f.cellW;
+          p.moveTo(x, f.originY);
+          p.lineTo(x, f.originY + f.height);
+        }
+        // Horizontal lines
+        for (let r = 0; r <= f.rows; r++) {
+          const y = f.originY + r * f.cellH;
+          p.moveTo(f.originX, y);
+          p.lineTo(f.originX + f.width, y);
+        }
+        ctx.stroke(p);
+      }
+    } else {
+      // No hello yet — show a small notice in the floor area so the operator
+      // knows the grid will populate as soon as TouchService is up.
+      ctx.fillStyle = 'rgba(255,220,160,0.85)';
+      ctx.font = '500 36px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TouchService 未連線 — 格線等 hello', VENUE_W / 2, VENUE_H / 2);
+    }
+
+    // Heat: count recent events per cell over LOCK_HOT_WINDOW.
+    pruneRecent();
+    const counts = new Map();
+    for (const ev of state.recentEvents) {
+      counts.set(ev.key, (counts.get(ev.key) || 0) + 1);
+    }
+
+    // Cell-rect helper, snapped to the real (originX/Y, cellW/H) — small
+    // cells stay actual size so the gridlines line up. Click hit-test runs
+    // off the same touchFaces math, so any cell, hot or quiet, is reachable.
+    const cellRect = (key) => {
+      const [faceIdxStr, colStr, rowStr] = key.split(':');
+      const faceIdx = parseInt(faceIdxStr, 10);
+      const col = parseInt(colStr, 10);
+      const row = parseInt(rowStr, 10);
+      const f = state.touchFaces && state.touchFaces.find(ff => ff.index === faceIdx);
+      if (!f) return null;
+      return {
+        x: f.originX + col * f.cellW,
+        y: f.originY + row * f.cellH,
+        w: f.cellW, h: f.cellH,
+      };
+    };
+
+    // Hot cells (yellow → orange → red by count).
+    let hotCount = 0;
+    counts.forEach((n, key) => {
+      if (state.lockedCells.has(key)) return;   // drawn later as locked
+      const r = cellRect(key); if (!r) return;
+      hotCount++;
+      if (n >= 6)      ctx.fillStyle = 'rgba(255,90,90,0.75)';
+      else if (n >= 3) ctx.fillStyle = 'rgba(255,160,60,0.70)';
+      else             ctx.fillStyle = 'rgba(255,225,80,0.60)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+    });
+
+    // Locked cells — solid red with thick black border so they read as "off".
+    state.lockedCells.forEach(key => {
+      const r = cellRect(key); if (!r) return;
+      ctx.fillStyle = 'rgba(220,40,40,0.92)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+    });
+
+    // Stats line — two lines in the side card so the numbers stand alone.
+    const statsEl = document.getElementById('lock-stats');
+    if (statsEl) {
+      statsEl.innerHTML = state.lockedCells.size + ' locked<br/>' + hotCount + ' hot';
+    }
+  }
+  function startLockRenderLoop() {
+    if (_lockRenderTimer) return;
+    renderLockCanvas();
+    _lockRenderTimer = setInterval(renderLockCanvas, 150);
+  }
+  function stopLockRenderLoop() {
+    if (_lockRenderTimer) clearInterval(_lockRenderTimer);
+    _lockRenderTimer = null;
+  }
+
+  function openLockMode() {
+    state.lockMode = true;
+    // Clear any in-flight ripples / drags so the venue goes quiet during calibration.
+    state.clicks.length = 0;
+    state.drags.length  = 0;
+    // Seed the locked set from cells that already fired in the last 10s.
+    // This catches anything broken that was misbehaving the moment before
+    // the operator pressed the button — no need to wait another window.
+    pruneRecent();
+    let seeded = 0;
+    for (const ev of state.recentEvents) {
+      if (!state.lockedCells.has(ev.key)) {
+        state.lockedCells.add(ev.key);
+        seeded++;
+      }
+    }
+    if (seeded > 0) persistLockedCells();
+    const cv = document.getElementById('lock-canvas');
+    const cc = document.getElementById('lock-controls');
+    if (cv) cv.classList.remove('hidden');
+    if (cc) cc.classList.remove('hidden');
+    updateLockPill();
+    startLockRenderLoop();
+  }
+  function closeLockMode() {
+    state.lockMode = false;
+    const cv = document.getElementById('lock-canvas');
+    const cc = document.getElementById('lock-controls');
+    if (cv) cv.classList.add('hidden');
+    if (cc) cc.classList.add('hidden');
+    updateLockPill();
+    stopLockRenderLoop();
+  }
+
+  if (!IS_PROJECTOR) {
+    const lockBtn = document.getElementById('lock-toggle');
+    if (lockBtn) {
+      lockBtn.addEventListener('click', () => {
+        if (state.lockMode) closeLockMode(); else openLockMode();
+      });
+    }
+    const doneBtn = document.getElementById('lock-done');
+    if (doneBtn) doneBtn.addEventListener('click', closeLockMode);
+
+    const clearBtn = document.getElementById('lock-clear');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      if (!state.lockedCells.size) return;
+      state.lockedCells.clear();
+      persistLockedCells();
+      updateLockPill();
+      renderLockCanvas();
+    });
+
+    // Click on the lock canvas — toggle the cell under the cursor (any cell,
+    // hot or otherwise; lets the operator lock dead-quiet ghost cells too).
+    const lockCv = document.getElementById('lock-canvas');
+    if (lockCv) {
+      lockCv.addEventListener('click', (e) => {
+        const rect = lockCv.getBoundingClientRect();
+        const vx = (e.clientX - rect.left) / rect.width  * VENUE_W;
+        const vy = (e.clientY - rect.top)  / rect.height * VENUE_H;
+        const hit = venuePxToCellKey(vx, vy);
+        if (!hit) return;
+        if (state.lockedCells.has(hit.key)) state.lockedCells.delete(hit.key);
+        else                                state.lockedCells.add(hit.key);
+        persistLockedCells();
+        updateLockPill();
+        renderLockCanvas();
+      });
+    }
+
+    // ESC closes calibration as a convenience.
+    window.addEventListener('keydown', (e) => {
+      if (state.lockMode && (e.key === 'Escape' || e.key === 'Esc')) {
+        e.preventDefault();
+        closeLockMode();
+      }
+    });
+  }
 
   // ---------- resize ----------
   function resize() {
@@ -2252,6 +3456,12 @@ function draw() {
       tickP5();
       // Then unfold the (just-updated) p5 snapshot onto the venue cross
       if (state.p5Unfold !== 'raw') {
+        // Force a black clear every p5-mode frame BEFORE the unfold. If the
+        // unfold short-circuits (e.g., between sketch switches when p5Snap
+        // hasn't been refilled), the canvas would otherwise show whatever
+        // the GPU last presented — including the prior sketch's grid.
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         renderP5Unfold();
       }
       requestAnimationFrame(frame);
@@ -2283,7 +3493,7 @@ function draw() {
     // Entrance background uniforms.
     setEntranceUniforms(U, state.entrance);
 
-    const arr = new Float32Array(32);
+    const arr = new Float32Array(128);
     for (let i = 0; i < state.clicks.length; i++) {
       const c = state.clicks[i];
       arr[i*4+0] = c.dir[0];
@@ -2293,6 +3503,20 @@ function draw() {
     }
     gl.uniform4fv(U.clicks, arr);
     gl.uniform1i(U.clickCount, state.clicks.length);
+
+    // Drag samples — expire anything older than 1.2s (matches dragTrail life
+    // of 1.0 + a small grace so the tail doesn't clip mid-render).
+    while (state.drags.length && now - state.drags[0].t > 1.2) state.drags.shift();
+    const dragArr = new Float32Array(128);
+    for (let i = 0; i < state.drags.length; i++) {
+      const d = state.drags[i];
+      dragArr[i*4+0] = d.dir[0];
+      dragArr[i*4+1] = d.dir[1];
+      dragArr[i*4+2] = d.dir[2];
+      dragArr[i*4+3] = d.t;
+    }
+    if (U.drags)     gl.uniform4fv(U.drags, dragArr);
+    if (U.dragCount) gl.uniform1i(U.dragCount, state.drags.length);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -2390,7 +3614,7 @@ function draw() {
         Math.sin(t * 0.4) * 0.3,
         -Math.sin(t * 0.3));
       tgl.uniform1f(u.mouseValid, 1);
-      tgl.uniform4fv(u.clicks, new Float32Array(32));
+      tgl.uniform4fv(u.clicks, new Float32Array(128));
       tgl.uniform1i(u.clickCount, 0);
       tgl.uniform1i(u.shaderId, shaderIdx);
       // We need to tell this thumb's shader to treat its canvas as the venue. Trick:
@@ -2466,6 +3690,13 @@ void main() {
   }
 
   function renderThumbnailFlat(canvasEl, shaderIdx, fsOverride) {
+    // Projector windows hide the dock entirely (CSS), so spinning up a
+    // per-tile RAF + thumbnail shader compile is pure waste. Hand back a
+    // dummy handle so callers (rebuildDock, applyGLSL → rebuild) don't
+    // crash, but never start the loop.
+    if (IS_PROJECTOR) {
+      return { rebuild: () => true, dispose: () => {} };
+    }
     const tgl = _getThumbGL();
     if (!tgl) return null;
     // Tile canvas is 2D — it just displays the snapshot from the shared
@@ -2517,8 +3748,15 @@ void main() {
 
     const seed = shaderIdx * 7.3;
     let f = 0;
+    // Throttle thumbs to ~30fps. The main fragment shader is FPS-capped at
+    // 30 already (state.fpsCap) so running tiny thumbnails at 60Hz just
+    // burns GPU cycles for no visual gain — a 112×112 preview reads the
+    // same to the eye at 30fps.
+    let _thumbTick = 0;
     function loop() {
       if (!alive) return;
+      _thumbTick++;
+      if (_thumbTick & 1) { requestAnimationFrame(loop); return; }
       if (!tp || !u) { requestAnimationFrame(loop); return; }
       tgl.useProgram(tp);
       tgl.bindBuffer(tgl.ARRAY_BUFFER, _thumbSharedBuf);
@@ -2530,7 +3768,7 @@ void main() {
       tgl.uniform1f(u.time, t);
       tgl.uniform3f(u.mouseDir, Math.cos(t * 0.3), Math.sin(t * 0.4) * 0.3, -Math.abs(Math.sin(t * 0.3)) - 0.4);
       tgl.uniform1f(u.mouseValid, 1);
-      tgl.uniform4fv(u.clicks, new Float32Array(32));
+      tgl.uniform4fv(u.clicks, new Float32Array(128));
       tgl.uniform1i(u.clickCount, 0);
       tgl.uniform1i(u.shaderId, shaderIdx);
       tgl.drawArrays(tgl.TRIANGLES, 0, 3);
@@ -2562,6 +3800,8 @@ void main() {
   // sketches — we can't easily live-render p5 in a 112×112 canvas without
   // spinning up a whole p5 instance per favorite.
   function paintP5Placeholder(canvasEl, name) {
+    // Dock is hidden on projector — skip the static placeholder too.
+    if (IS_PROJECTOR) return { rebuild: () => true, dispose: () => {} };
     canvasEl.width = 112; canvasEl.height = 112;
     const c2d = canvasEl.getContext('2d');
     if (!c2d) return null;
@@ -2596,25 +3836,194 @@ void main() {
   const dock = document.getElementById('dock');
   // dockEntries: [{ kind:'shader'|'fav', shaderIdx?, favId?, tile, thumbHandle }, …]
   let dockEntries = [];
-  // activeFavId is non-null only when the *current* Custom body matches a
-  // saved favorite (i.e. the user just loaded one and hasn't edited yet).
+  // activeFavId tracks which favorite the user last loaded. We keep it set
+  // even after the user edits the textarea so Save can target that slot —
+  // _activeFavDirty tells the dock tile to show the unsaved-changes dot.
   let activeFavId = null;
+  let _activeFavDirty = false;
+  // Drag-reorder state for dock tiles. Entry IDs are "aurora" | "custom" |
+  // "fav:<favId>". Module-scoped so it survives a rebuildDock() that may
+  // happen during the drag (it normally doesn't, but be defensive).
+  let _dragEntryId = null;
+
+  // ---------- unified dock order ----------
+  // Persisted dock order: array of entry IDs ("aurora" | "custom" | "fav:<id>").
+  // When this key is absent we use the default (aurora → favs → custom). On
+  // every drag-reorder we save the new order; on every rebuild we reconcile
+  // against the current favs list (drop deleted favs, append newly saved ones).
+  const DOCK_ORDER_KEY = 'shaderWallpapers.venue.dockOrder.v1';
+  function loadDockOrder() {
+    try {
+      const raw = localStorage.getItem(DOCK_ORDER_KEY);
+      if (!raw) return null;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : null;
+    } catch (e) { return null; }
+  }
+  function saveDockOrder(arr) {
+    try { localStorage.setItem(DOCK_ORDER_KEY, JSON.stringify(arr)); }
+    catch (e) {}
+  }
+  // Take a saved order and the current favs list; drop deleted entries,
+  // append new favs at the end, ensure aurora/custom exist.
+  function reconcileDockOrder(saved, favs) {
+    const favEntryIds = new Set(favs.map(f => 'fav:' + f.id));
+    const seen = new Set();
+    const out = [];
+    for (const id of saved) {
+      if (seen.has(id)) continue;
+      if (id === 'aurora' || id === 'custom') { out.push(id); seen.add(id); }
+      else if (typeof id === 'string' && id.startsWith('fav:') && favEntryIds.has(id)) {
+        out.push(id); seen.add(id);
+      }
+    }
+    for (const f of favs) {
+      const id = 'fav:' + f.id;
+      if (!seen.has(id)) { out.push(id); seen.add(id); }
+    }
+    if (!seen.has('aurora')) out.unshift('aurora');
+    if (!seen.has('custom')) out.push('custom');
+    return out;
+  }
+  function effectiveDockOrder() {
+    const favs = loadFavs();
+    const saved = loadDockOrder();
+    return saved ? reconcileDockOrder(saved, favs)
+                 : ['aurora', ...favs.map(f => 'fav:' + f.id), 'custom'];
+  }
+  // Apply a drop: move source entry to target's current position.
+  function applyDockReorder(sourceId, targetId) {
+    if (!sourceId || !targetId || sourceId === targetId) return false;
+    const order = effectiveDockOrder();
+    const from = order.indexOf(sourceId);
+    const to   = order.indexOf(targetId);
+    if (from < 0 || to < 0) return false;
+    const [moved] = order.splice(from, 1);
+    order.splice(to, 0, moved);
+    saveDockOrder(order);
+    return true;
+  }
+  // Shared OSC index badge + drag handlers — attached to every tile.
+  // When playlist is active, idx may be null (tile is in dock but not in
+  // playlist) — render a dimmed "—" so it's obvious the OSC system skips it.
+  function makeOscBadge(idx) {
+    const el = document.createElement('span');
+    el.className = 'osc-idx';
+    if (idx == null) {
+      el.classList.add('off');
+      el.textContent = '—';
+      el.title = '不在 OSC playlist 內,/704/shader 收不到';
+    } else {
+      el.textContent = String(idx);
+      el.title = 'OSC: /704/shader ' + idx;
+    }
+    return el;
+  }
+  function attachDragHandlers(tile, entryId) {
+    tile.draggable = true;
+    tile.dataset.entryId = entryId;
+    tile.addEventListener('dragstart', (e) => {
+      _dragEntryId = entryId;
+      tile.classList.add('drag-source');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', entryId); } catch (err) {}
+      }
+    });
+    tile.addEventListener('dragend', () => {
+      _dragEntryId = null;
+      tile.classList.remove('drag-source');
+      dock.querySelectorAll('.tile.drag-over').forEach(t => t.classList.remove('drag-over'));
+    });
+    tile.addEventListener('dragover', (e) => {
+      if (!_dragEntryId || _dragEntryId === entryId) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      tile.classList.add('drag-over');
+    });
+    tile.addEventListener('dragleave', () => {
+      tile.classList.remove('drag-over');
+    });
+    tile.addEventListener('drop', (e) => {
+      e.preventDefault();
+      tile.classList.remove('drag-over');
+      const sourceId = _dragEntryId;
+      _dragEntryId = null;
+      if (applyDockReorder(sourceId, entryId)) {
+        renderFavs();
+        rebuildDock();
+        console.log('[reorder]', sourceId, '→ slot of', entryId);
+      }
+    });
+  }
 
   function escapeAttr(s) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  function makeTile(labelText, klass) {
+  function makeTile(labelText, klass, typeTag) {
     const tile = document.createElement('div');
     tile.className = 'tile' + (klass ? ' ' + klass : '');
     const c = document.createElement('canvas');
     c.width = 112; c.height = 112;
     tile.appendChild(c);
+    if (typeTag) {
+      const tag = document.createElement('span');
+      const tagClass = typeTag.toLowerCase() === 'p5' ? 'p5' : 'glsl';
+      tag.className = 'type-badge ' + tagClass;
+      tag.textContent = typeTag;
+      tile.appendChild(tag);
+    }
     const lbl = document.createElement('span');
     lbl.className = 'label';
     lbl.textContent = labelText;
     tile.appendChild(lbl);
     return tile;
+  }
+
+  // Built-in shaders (Aurora, Custom) live in code, but the user can hide
+  // them from the dock. Hidden ids are kept in localStorage so the choice
+  // survives reloads — they can be restored via the "↶ N hidden" pill that
+  // appears in the dock when any are hidden.
+  const HIDDEN_BUILTINS_KEY = 'shaderWallpapers.venue.hiddenBuiltins.v1';
+  function loadHiddenBuiltins() {
+    try {
+      const raw = localStorage.getItem(HIDDEN_BUILTINS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveHiddenBuiltins(ids) {
+    try { localStorage.setItem(HIDDEN_BUILTINS_KEY, JSON.stringify(ids)); } catch (e) {}
+  }
+  async function hideBuiltin(shaderId, shaderName) {
+    const ok = await inlineConfirm(
+      '要從 dock 隱藏「' + shaderName + '」嗎？\n（程式碼不會真刪，可以從 dock 上的 ↶ 還原。）',
+      { confirmLabel: '隱藏', danger: true }
+    );
+    if (!ok) return;
+    const hidden = loadHiddenBuiltins();
+    if (!hidden.includes(shaderId)) hidden.push(shaderId);
+    saveHiddenBuiltins(hidden);
+    // If the active shader was the one being hidden, fall back to Aurora
+    // (or whatever's left).
+    if (state.activeIdx >= 0 && SHADERS[state.activeIdx] && SHADERS[state.activeIdx].id === shaderId) {
+      const fallback = SHADERS.findIndex(s => !hidden.includes(s.id));
+      if (fallback >= 0) activateShader(fallback);
+    }
+    rebuildDock();
+  }
+  async function restoreHiddenBuiltins() {
+    const hidden = loadHiddenBuiltins();
+    if (!hidden.length) return;
+    const ok = await inlineConfirm(
+      '還原 ' + hidden.length + ' 個被隱藏的內建特效嗎？',
+      { confirmLabel: '還原' }
+    );
+    if (!ok) return;
+    saveHiddenBuiltins([]);
+    rebuildDock();
   }
 
   function rebuildDock() {
@@ -2624,85 +4033,131 @@ void main() {
       if (e.tile && e.tile.parentNode) e.tile.parentNode.removeChild(e.tile);
     });
     dockEntries = [];
+    const oldPill = dock.querySelector('.restore-hidden');
+    if (oldPill) oldPill.remove();
 
     const sep = dock.querySelector('.sep-vert');
+    const hidden = loadHiddenBuiltins();
+    const favs = loadFavs();
+    const favMap = new Map(favs.map(f => [f.id, f]));
+    const auroraIdx = SHADERS.findIndex(s => s.id === 'aurora');
+    const customIdx = SHADERS.findIndex(s => s.id === 'custom');
 
-    // Layout order: Aurora → saved favorites → Custom (always rightmost).
-    // The Custom slot stays pinned to the end so the "editable" wallpaper is
-    // always at the same predictable position no matter how many favorites
-    // the user has saved.
-    const built = SHADERS.map((s, i) => ({ shader: s, idx: i }));
-    const auroraEntry = built.find(b => b.shader.id === 'aurora');
-    const customEntry = built.find(b => b.shader.id === 'custom');
-
-    const addBuiltInTile = (b) => {
-      const tile = makeTile(b.shader.name);
-      tile.title = b.shader.name + ' — ' + b.shader.desc +
-                   (b.shader.id === 'custom' ? ' (right-click to edit code)' : '');
-      tile.addEventListener('click', () => activateShader(b.idx));
-      if (b.shader.id === 'custom') {
-        // Right-click on the Custom tile = open the code editor immediately
-        tile.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          activateShader(b.idx);
+    const buildBuiltInTile = (shaderIdx, entryId, oscIdx) => {
+      const s = SHADERS[shaderIdx];
+      const tile = makeTile(s.name, null, 'GLSL');
+      tile.title = s.name + ' — ' + s.desc +
+                   ' (右鍵=從 dock 隱藏' +
+                   (s.id === 'custom' ? '；按住 Shift+右鍵=開啟程式碼編輯器' : '') +
+                   '; 拖曳=改順序)';
+      tile.appendChild(makeOscBadge(oscIdx));
+      tile.addEventListener('click', () => activateShader(shaderIdx));
+      tile.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (s.id === 'custom' && e.shiftKey) {
+          activateShader(shaderIdx);
           toggleCodePanel(true);
-        });
-      }
+          return;
+        }
+        hideBuiltin(s.id, s.name);
+      });
+      attachDragHandlers(tile, entryId);
       dock.insertBefore(tile, sep);
-      const handle = renderThumbnailFlat(tile.querySelector('canvas'), b.idx);
-      dockEntries.push({ kind: 'shader', shaderIdx: b.idx, tile, thumbHandle: handle });
+      const handle = renderThumbnailFlat(tile.querySelector('canvas'), shaderIdx);
+      dockEntries.push({ kind: 'shader', shaderIdx, tile, thumbHandle: handle });
     };
 
-    // 1. Aurora first
-    if (auroraEntry) addBuiltInTile(auroraEntry);
-
-    // 2. Saved favorites — each becomes its own tile in the middle of the dock.
-    const favs = loadFavs();
-    favs.forEach(f => {
-      const tile = makeTile(f.name, 'fav');
+    const buildFavTile = (f, entryId, oscIdx) => {
+      const tile = makeTile(f.name, 'fav', f.mode === 'p5' ? 'p5' : 'GLSL');
       const star = document.createElement('span');
       star.className = 'fav-star';
       star.textContent = '★';
       tile.appendChild(star);
-      tile.title = `★ ${f.name} (${f.mode.toUpperCase()}) — click: load · right-click: edit code · double-click: rename`;
+      tile.appendChild(makeOscBadge(oscIdx));
+      tile.title = `★ ${f.name} (${f.mode.toUpperCase()}) — click: 載入 · 雙擊: 載入並開啟編輯器 · 右鍵: 重新命名 / 刪除 · 拖曳: 改順序`;
       tile.addEventListener('click', () => loadFav(f.id));
-      // Right-click = load + open the editor so the user can tweak this favorite.
-      // (Deletion is via the × on the chip in the code panel — keeps right-click
-      // single-purpose so we never accidentally delete a saved favorite.)
       tile.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        loadFav(f.id);
-        toggleCodePanel(true);
+        openFavMenu(f.id, e.clientX, e.clientY);
       });
-      // Double-click anywhere on the tile = rename
       tile.addEventListener('dblclick', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        renameFav(f.id);
+        loadFav(f.id);
+        if (typeof toggleCodePanel === 'function') toggleCodePanel(true);
       });
+      attachDragHandlers(tile, entryId);
       dock.insertBefore(tile, sep);
-
       const cnv = tile.querySelector('canvas');
       let handle;
       if (f.mode === 'glsl') {
         const favThumbFs = buildThumbFS(f.body);
         handle = renderThumbnailFlat(cnv, CUSTOM_IDX, favThumbFs);
       }
-      if (!handle) {
-        handle = paintP5Placeholder(cnv, f.name);
-      }
+      if (!handle) handle = paintP5Placeholder(cnv, f.name);
       dockEntries.push({ kind: 'fav', favId: f.id, mode: f.mode, tile, thumbHandle: handle });
-    });
+    };
 
-    // 3. Custom built-in — pinned to the right of everything else.
-    if (customEntry) addBuiltInTile(customEntry);
+    // Walk the persisted dock order (or its default) and build tiles in that
+    // sequence. OSC index = position among VISIBLE tiles when playlist is
+    // OFF; when playlist is ON, badge instead = playlist slot for that entry
+    // (or "—" if the entry isn't in playlist at all).
+    const order = effectiveDockOrder();
+    // Sync dock → playlist before reading playlist back, so badges this rebuild
+    // already reflect the new mirror (no one-rebuild lag).
+    syncPlaylistFromDock();
+    const playlist = activePlaylist();
+    const playlistMap = new Map();
+    if (playlist.length) {
+      // First occurrence wins if the user has the same effect in multiple slots.
+      playlist.forEach((entryId, slot) => {
+        if (entryId != null && !playlistMap.has(entryId)) playlistMap.set(entryId, slot);
+      });
+    }
+    const badgeFor = (entryId, dockPos) => {
+      if (playlist.length) {
+        return playlistMap.has(entryId) ? playlistMap.get(entryId) : null;
+      }
+      return dockPos;
+    };
+    let dockPos = 0;
+    for (const entryId of order) {
+      if (entryId === 'aurora') {
+        if (hidden.includes('aurora') || auroraIdx < 0) continue;
+        buildBuiltInTile(auroraIdx, 'aurora', badgeFor('aurora', dockPos));
+        dockPos++;
+      } else if (entryId === 'custom') {
+        if (hidden.includes('custom') || customIdx < 0) continue;
+        buildBuiltInTile(customIdx, 'custom', badgeFor('custom', dockPos));
+        dockPos++;
+      } else if (typeof entryId === 'string' && entryId.startsWith('fav:')) {
+        const favId = entryId.slice(4);
+        const f = favMap.get(favId);
+        if (!f) continue;
+        buildFavTile(f, entryId, badgeFor(entryId, dockPos));
+        dockPos++;
+      }
+    }
+
+    if (hidden.length > 0) {
+      const pill = document.createElement('div');
+      pill.className = 'restore-hidden';
+      pill.textContent = '↶ ' + hidden.length + ' 已隱藏';
+      pill.title = '點擊還原所有被隱藏的內建特效';
+      pill.addEventListener('click', restoreHiddenBuiltins);
+      dock.insertBefore(pill, sep);
+    }
 
     updateActiveTileClasses();
+    // Refresh the OSC playlist UI so it reflects the dock-mirror written by
+    // syncPlaylistFromDock() above (slot dropdowns / banner / disabled state).
+    if (typeof renderPlaylist === 'function') renderPlaylist();
   }
 
   function updateActiveTileClasses() {
     dockEntries.forEach(e => {
       let active = false;
+      let modified = false;
       if (e.kind === 'shader') {
         if (e.shaderIdx === CUSTOM_IDX) {
           // Custom built-in is only "active" when no favorite is loaded
@@ -2712,8 +4167,10 @@ void main() {
         }
       } else if (e.kind === 'fav') {
         active = (state.activeIdx === CUSTOM_IDX) && (activeFavId === e.favId);
+        modified = active && _activeFavDirty;
       }
       e.tile.classList.toggle('active', active);
+      e.tile.classList.toggle('modified', modified);
     });
   }
 
@@ -2785,6 +4242,13 @@ void main() {
     if (p5Snap.width !== srcCanvas.width || p5Snap.height !== srcCanvas.height) {
       p5Snap.width  = srcCanvas.width;
       p5Snap.height = srcCanvas.height;
+      // resizing a 2D canvas already clears it
+    } else {
+      // Same size — must explicitly clear, otherwise transparent pixels in the
+      // new sketch source-over blend onto whatever pixels the PREVIOUS sketch
+      // left here (showing the old sketch as a phantom "background image"
+      // under the new one).
+      p5SnapCtx.clearRect(0, 0, p5Snap.width, p5Snap.height);
     }
     try {
       p5SnapCtx.drawImage(srcCanvas, 0, 0);
@@ -2955,6 +4419,20 @@ void main() {
       try { p5Instance.remove(); } catch(e) {}
       p5Instance = null;
     }
+    // Drop stale snapshot pixels so the unfold pass doesn't briefly show the
+    // PREVIOUS sketch as a background while the new sketch's first frame is
+    // still pending.
+    if (p5Snap.width && p5Snap.height) {
+      p5SnapCtx.clearRect(0, 0, p5Snap.width, p5Snap.height);
+    }
+    p5SnapDirty = false;
+    // Also zero out the GPU texture — even if the unfold pass is forced to
+    // run, sampling p5Tex should yield black, not the previous sketch.
+    if (p5Tex) {
+      gl.bindTexture(gl.TEXTURE_2D, p5Tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+        new Uint8Array([0, 0, 0, 255]));
+    }
     // Ensure a placeholder canvas survives so the CSS hooks keep working
     if (!document.getElementById('p5-canvas')) {
       const c = document.createElement('canvas');
@@ -3065,27 +4543,47 @@ void main() {
   codeBtn.addEventListener('click', () => toggleCodePanel());
   codeClose.addEventListener('click', () => toggleCodePanel(false));
 
+  // Compiled program cache, keyed on (customBody, entranceBody). OSC-driven
+  // fav switching used to spend 50–200ms re-compiling the same shaders on
+  // every press. With this cache the second hit on any body is essentially
+  // free (gl.useProgram + already-resolved uniform locations).
+  const _shaderProgramCache = new Map();
+  // Also cache the per-body thumb fragment shader so the Custom tile's preview
+  // doesn't rebuild from scratch on each switch.
+  const _thumbFsCache = new Map();
   function applyGLSL(body) {
     const entBody = (state.entrance.shaderId === 'fav') ? state.entrance.shaderBody : '';
-    const r = buildProgram(body, entBody);
-    if (r.error) {
-      const fullSrc = buildFragmentSrc(body, entBody);
-      const preludeBefore = fullSrc.indexOf('vec3 shaderCustom(vec3 dir) {\n') + 'vec3 shaderCustom(vec3 dir) {\n'.length;
-      const preludeLine = fullSrc.slice(0, preludeBefore).split('\n').length;
-      const remapped = r.error.replace(/(\d+):(\d+)/g, (m, a, b) => {
-        const userLine = parseInt(b, 10) - (preludeLine - 1);
-        return userLine > 0 ? `line ${userLine}` : m;
-      });
-      setStatus('GLSL compile error:\n' + remapped.trim(), 'err');
-      return false;
+    const cacheKey = body + '\0' + entBody;
+    let cached = _shaderProgramCache.get(cacheKey);
+    let fromCache = !!cached;
+    if (!cached) {
+      const r = buildProgram(body, entBody);
+      if (r.error) {
+        const fullSrc = buildFragmentSrc(body, entBody);
+        const preludeBefore = fullSrc.indexOf('vec3 shaderCustom(vec3 dir) {\n') + 'vec3 shaderCustom(vec3 dir) {\n'.length;
+        const preludeLine = fullSrc.slice(0, preludeBefore).split('\n').length;
+        const remapped = r.error.replace(/(\d+):(\d+)/g, (m, a, b) => {
+          const userLine = parseInt(b, 10) - (preludeLine - 1);
+          return userLine > 0 ? `line ${userLine}` : m;
+        });
+        setStatus('GLSL compile error:\n' + remapped.trim(), 'err');
+        return false;
+      }
+      cached = { program: r.program, U: uniformsFor(r.program) };
+      _shaderProgramCache.set(cacheKey, cached);
     }
-    const oldProg = prog;
-    prog = r.program;
-    U = uniformsFor(prog);
+    // Swap programs — but DO NOT deleteProgram(oldProg) because it might
+    // still live in the cache for a future switch.
+    prog = cached.program;
+    U = cached.U;
     gl.useProgram(prog);
-    if (oldProg) gl.deleteProgram(oldProg);
     state.customBody = body;
-    THUMB_FS = buildThumbFS(body);
+    let cachedThumb = _thumbFsCache.get(body);
+    if (!cachedThumb) {
+      cachedThumb = buildThumbFS(body);
+      _thumbFsCache.set(body, cachedThumb);
+    }
+    THUMB_FS = cachedThumb;
     // Rebuild the live Custom tile's thumb so the dock preview matches.
     const custEntry = dockEntries.find(e => e.kind === 'shader' && e.shaderIdx === CUSTOM_IDX);
     if (custEntry && custEntry.thumbHandle && custEntry.thumbHandle.rebuild) {
@@ -3094,9 +4592,13 @@ void main() {
     // switch off p5 mode, switch to Custom shader
     setP5Active(false);
     setActive(CUSTOM_IDX);
-    setStatus('GLSL compiled OK · ' + body.split('\n').length + ' lines.', 'ok');
+    setStatus((fromCache ? 'GLSL (cached) · ' : 'GLSL compiled OK · ')
+              + body.split('\n').length + ' lines.', 'ok');
     saveCodeState();
-    syncSend('glsl', { body: body });
+    // Include activeFavId so the projector can track which favorite is
+    // currently live. Otherwise the projector applies the body but never
+    // knows it's "this fav" — so reopens / snapshots lose the association.
+    syncSend('glsl', { body: body, favId: (IS_PROJECTOR ? null : activeFavId) });
     return true;
   }
 
@@ -3139,7 +4641,7 @@ void main() {
       'ok'
     );
     saveCodeState();
-    syncSend('p5', { body: body });
+    syncSend('p5', { body: body, favId: (IS_PROJECTOR ? null : activeFavId) });
     return true;
   }
 
@@ -3156,6 +4658,102 @@ void main() {
     renderFavs();
     applyCustomCode();
   });
+
+  // Clear: wipe the editor to an empty buffer. Doesn't compile/apply — leaves
+  // the previous shader running so the venue doesn't go black while you type
+  // the new one. Press Apply (or Ctrl/Cmd+Enter) when ready.
+  const codeClear = document.getElementById('cp-clear');
+  if (codeClear) {
+    codeClear.addEventListener('click', () => {
+      codeTA.value = '';
+      activeFavId = null;
+      renderFavs();
+      setStatus('Editor cleared. Type your code and press Apply.', null);
+      codeTA.focus();
+    });
+  }
+
+  // Electron disables window.prompt() / window.confirm() by default, so a
+  // bare prompt() call silently returns null — the favorite-save button
+  // would appear dead. Build a tiny modal that matches the app theme and
+  // returns a Promise<string|null> (prompt) or Promise<boolean> (confirm).
+  function _buildInlineModal({ message, defaultValue, kind, confirmLabel, danger }) {
+    return new Promise((resolve) => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'inline-modal-backdrop';
+      const modal = document.createElement('div');
+      modal.className = 'inline-modal';
+      const msg = document.createElement('p');
+      msg.className = 'msg';
+      msg.textContent = message;
+      modal.appendChild(msg);
+
+      let input = null;
+      if (kind === 'prompt') {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = defaultValue || '';
+        modal.appendChild(input);
+      }
+
+      const row = document.createElement('div');
+      row.className = 'row';
+      const cancel = document.createElement('button');
+      cancel.textContent = 'Cancel';
+      const ok = document.createElement('button');
+      ok.textContent = confirmLabel || (kind === 'confirm' ? 'OK' : 'Save');
+      ok.className = danger ? 'danger' : 'primary';
+      row.appendChild(cancel);
+      row.appendChild(ok);
+      modal.appendChild(row);
+      backdrop.appendChild(modal);
+      document.body.appendChild(backdrop);
+
+      let settled = false;
+      const cleanup = () => {
+        backdrop.classList.remove('open');
+        setTimeout(() => { try { backdrop.remove(); } catch (e) {} }, 220);
+      };
+      const done = (val) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(val);
+      };
+
+      cancel.addEventListener('click', () => done(kind === 'confirm' ? false : null));
+      ok.addEventListener('click', () => done(kind === 'prompt' ? input.value : true));
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) done(kind === 'confirm' ? false : null);
+      });
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); done(kind === 'confirm' ? false : null); window.removeEventListener('keydown', onKey, true); }
+        else if (e.key === 'Enter' && kind !== 'confirm' && document.activeElement === input) {
+          e.preventDefault();
+          done(input.value);
+          window.removeEventListener('keydown', onKey, true);
+        }
+      };
+      window.addEventListener('keydown', onKey, true);
+
+      requestAnimationFrame(() => {
+        backdrop.classList.add('open');
+        if (input) { input.focus(); input.select(); }
+        else ok.focus();
+      });
+    });
+  }
+  function inlinePrompt(message, defaultValue) {
+    return _buildInlineModal({ message, defaultValue, kind: 'prompt' });
+  }
+  function inlineConfirm(message, opts) {
+    return _buildInlineModal({
+      message,
+      kind: 'confirm',
+      confirmLabel: (opts && opts.confirmLabel) || 'OK',
+      danger: !!(opts && opts.danger),
+    });
+  }
 
   // ---------- favorites (★ saved snippets) ----------
   // Stored in localStorage as an array of:
@@ -3189,6 +4787,8 @@ void main() {
       empty.className = 'cp-fav-empty';
       empty.textContent = 'No saved snippets yet — click Save to keep your current code.';
       favListEl.appendChild(empty);
+      // Playlist dropdowns depend on the favs list; keep them in sync.
+      if (typeof renderPlaylist === 'function') renderPlaylist();
       return;
     }
     favs.forEach(f => {
@@ -3229,36 +4829,164 @@ void main() {
       });
       favListEl.appendChild(chip);
     });
+    if (typeof renderPlaylist === 'function') renderPlaylist();
   }
 
-  function saveCurrentAsFav() {
+  // Cap on how many favorites can live concurrently in the dock. With the
+  // venue's Blackwell-class GPU the per-thumb cost is trivial, but the dock
+  // becomes unwieldy past this and localStorage fills up. We surface the
+  // limit explicitly instead of silently dropping the oldest entry.
+  const FAV_CAP = 24;
+  async function saveCurrentAsFav() {
     // Pull whatever's in the textarea (covers in-flight edits)
     const mode = state.customMode;
     const body = codeTA.value;
-    const defaultName = (mode === 'p5' ? 'p5 sketch ' : 'GLSL ') +
-                        new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const name = prompt('Save this code as a favorite. Name:', defaultName);
+    const favs = loadFavs();
+    // Cap reached → ask the user whether to drop the oldest before we
+    // even prompt for a name. Without this the previous code silently
+    // popped favs.pop() after save, so the user lost an entry without
+    // any warning. (Skipped when we'll be overwriting an existing slot —
+    // that path doesn't grow the list.)
+    // If the operator is editing an existing favorite (loaded via loadFav)
+    // pre-fill its name so pressing Enter overwrites that same entry. The
+    // alternative (always pre-filling with a timestamp) made overwrite-in-
+    // place impossible without retyping the exact name from memory.
+    const activeFav = activeFavId ? favs.find(f => f.id === activeFavId) : null;
+    const defaultName = activeFav
+      ? activeFav.name
+      : ((mode === 'p5' ? 'p5 sketch ' : 'GLSL ') +
+         new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+    const promptLabel = activeFav
+      ? 'Save changes to "' + activeFav.name + '" — keep the name to overwrite, or change it to save as new.'
+      : 'Save this code as a favorite. Name:';
+    const name = await inlinePrompt(promptLabel, defaultName);
     if (name == null) return; // cancelled
     const trimmed = name.trim();
     if (!trimmed) return;
-    const favs = loadFavs();
+    // Reload in case the list changed during the prompt awaits above.
+    const favs2 = loadFavs();
+    // Case-insensitive name match → overwrite that slot in place. Without
+    // this the list ended up with duplicate-name entries and clicking the
+    // older tile still ran old code (the user's original complaint).
+    const lower = trimmed.toLowerCase();
+    const existingIdx = favs2.findIndex(f => (f.name || '').trim().toLowerCase() === lower);
+    if (existingIdx >= 0) {
+      const existing = favs2[existingIdx];
+      // Skip the confirm dialog when the operator is overwriting the same
+      // favorite they had loaded — that's the obvious "save my edits" flow
+      // and an extra modal makes it feel like the system doesn't trust them.
+      // Only confirm when the name now matches a DIFFERENT existing fav.
+      const overwritingActive = activeFavId && existing.id === activeFavId;
+      if (!overwritingActive) {
+        const ok = await inlineConfirm(
+          '已存在收藏「' + existing.name + '」。要用目前的代碼覆蓋它嗎？',
+          { confirmLabel: '覆蓋', danger: true }
+        );
+        if (!ok) return;
+      }
+      // Overwrite in place — keep the same id so any reference (entrance,
+      // active selection, OSC index, dock order) still points at it. Update
+      // mode in case the user switched GLSL ↔ p5 since the last save.
+      existing.body = body;
+      existing.mode = mode;
+      existing.ts   = Date.now();
+      // Sweep out any other duplicates with the same name (could be left
+      // over from before the overwrite fix existed). Without this the old
+      // tile still appears in the dock and clicking it loads stale code.
+      const deduped = favs2.filter((f, i) =>
+        i === existingIdx ||
+        (f.name || '').trim().toLowerCase() !== lower
+      );
+      saveFavs(deduped);
+      activeFavId = existing.id;
+      _activeFavDirty = false;
+      renderFavs();
+      rebuildDock();
+      if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
+      setStatus('★ Overwrote "' + existing.name + '" (' + mode.toUpperCase() + ').', 'ok');
+      return;
+    }
+    // New favorite — cap check applies now since the list will grow.
+    if (favs2.length >= FAV_CAP) {
+      const oldest = favs2[favs2.length - 1];
+      const ok = await inlineConfirm(
+        '已達 ' + FAV_CAP + ' 個收藏上限。要刪除最舊的「' + oldest.name + '」並繼續儲存嗎？',
+        { confirmLabel: '刪除最舊並儲存', danger: true }
+      );
+      if (!ok) return;
+    }
     const id = 'f_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
-    favs.unshift({ id, name: trimmed, mode, body, ts: Date.now() });
-    // Cap at 24 to keep localStorage modest
-    while (favs.length > 24) favs.pop();
-    saveFavs(favs);
+    favs2.unshift({ id, name: trimmed, mode, body, ts: Date.now() });
+    while (favs2.length > FAV_CAP) favs2.pop();
+    saveFavs(favs2);
     activeFavId = id;
+    _activeFavDirty = false;
     renderFavs();
     rebuildDock();
     if (typeof refreshEntranceUI === 'function') refreshEntranceUI();
     setStatus('★ Saved as "' + trimmed + '" (' + mode.toUpperCase() + ').', 'ok');
   }
 
-  function deleteFav(id) {
+  // Right-click context menu for favorite tiles (Rename / Delete).
+  // openFavMenu positions the shared #fav-context-menu near the cursor and
+  // binds its buttons to the current fav id. closeFavMenu hides it again.
+  // Dismissed by Escape, by clicking outside the menu, by scrolling, or by
+  // resizing — anything that could move the anchored tile out from under it.
+  let _favMenuFavId = null;
+  function openFavMenu(favId, x, y) {
+    const m = document.getElementById('fav-context-menu');
+    if (!m) return;
+    _favMenuFavId = favId;
+    m.classList.remove('hidden');
+    m.setAttribute('aria-hidden', 'false');
+    // Position the menu, keeping it inside the viewport.
+    const rect = m.getBoundingClientRect();
+    const w = rect.width || 160, h = rect.height || 80;
+    const left = Math.min(x, window.innerWidth  - w - 8);
+    const top  = Math.min(y, window.innerHeight - h - 8);
+    m.style.left = Math.max(8, left) + 'px';
+    m.style.top  = Math.max(8, top)  + 'px';
+  }
+  function closeFavMenu() {
+    const m = document.getElementById('fav-context-menu');
+    if (!m) return;
+    m.classList.add('hidden');
+    m.setAttribute('aria-hidden', 'true');
+    _favMenuFavId = null;
+  }
+  {
+    const m = document.getElementById('fav-context-menu');
+    if (m) {
+      m.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        const id = _favMenuFavId;
+        const act = btn.dataset.act;
+        closeFavMenu();
+        if (!id) return;
+        if      (act === 'rename') renameFav(id);
+        else if (act === 'delete') deleteFav(id);
+      });
+    }
+    document.addEventListener('mousedown', (e) => {
+      const m2 = document.getElementById('fav-context-menu');
+      if (!m2 || m2.classList.contains('hidden')) return;
+      if (m2.contains(e.target)) return;
+      closeFavMenu();
+    }, true);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeFavMenu();
+    });
+    window.addEventListener('resize', closeFavMenu);
+    window.addEventListener('scroll', closeFavMenu, true);
+  }
+
+  async function deleteFav(id) {
     const favs = loadFavs();
     const item = favs.find(x => x.id === id);
     if (!item) return;
-    if (!confirm('Delete favorite "' + item.name + '"?')) return;
+    const ok = await inlineConfirm('Delete favorite "' + item.name + '"?', { confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
     const filtered = favs.filter(x => x.id !== id);
     saveFavs(filtered);
     if (activeFavId === id) activeFavId = null;
@@ -3268,11 +4996,11 @@ void main() {
     setStatus('Deleted favorite "' + item.name + '".', null);
   }
 
-  function renameFav(id) {
+  async function renameFav(id) {
     const favs = loadFavs();
     const item = favs.find(x => x.id === id);
     if (!item) return;
-    const next = prompt('Rename favorite:', item.name);
+    const next = await inlinePrompt('Rename favorite:', item.name);
     if (next == null) return; // cancelled
     const trimmed = next.trim();
     if (!trimmed || trimmed === item.name) return;
@@ -3306,6 +5034,7 @@ void main() {
     if (item.mode === 'p5') state.p5Body = item.body;
     else                    state.customBody = item.body;
     activeFavId = id;
+    _activeFavDirty = false;
     renderFavs();
     applyCustomCode();
     // applyCustomCode -> setActive -> updateActiveTileClasses uses activeFavId,
@@ -3323,17 +5052,23 @@ void main() {
   favSaveBtn.addEventListener('click', saveCurrentAsFav);
   renderFavs();
 
-  // Clear the "active favorite" indicator as soon as the user starts editing
-  // (so the chip doesn't keep pretending the textarea matches that saved body).
+  // Track "edited but not yet saved" so the tile can show a modified dot.
+  // Critically we DO NOT clear activeFavId here — clearing it broke the
+  // save flow (Save couldn't tell which fav the user was editing once the
+  // textarea diverged or was wiped).  Keep the link; just mark dirty.
+  // (_activeFavDirty is declared up at the top of the IIFE alongside activeFavId.)
   codeTA.addEventListener('input', () => {
     if (activeFavId != null) {
       const favs = loadFavs();
       const f = favs.find(x => x.id === activeFavId);
-      if (!f || f.body !== codeTA.value || f.mode !== state.customMode) {
-        activeFavId = null;
-        renderFavs();
+      const dirty = !f || f.body !== codeTA.value || f.mode !== state.customMode;
+      if (dirty !== _activeFavDirty) {
+        _activeFavDirty = dirty;
         updateActiveTileClasses();
       }
+    } else if (_activeFavDirty) {
+      _activeFavDirty = false;
+      updateActiveTileClasses();
     }
   });
 
@@ -3562,7 +5297,7 @@ void main() {
             ogl.activeTexture(ogl.TEXTURE0);
           } catch(e) { console.warn('capture: entrance image upload:', e); }
         }
-        const arr = new Float32Array(32);
+        const arr = new Float32Array(128);
         for (let i = 0; i < state.clicks.length; i++) {
           arr[i*4+0] = state.clicks[i].dir[0];
           arr[i*4+1] = state.clicks[i].dir[1];
@@ -3814,6 +5549,7 @@ void main() {
     if (!e.target.closest('#quality-wrap'))  qWrap.classList.remove('open');
     if (!e.target.closest('#capture-wrap'))  capWrap.classList.remove('open');
     if (!e.target.closest('#entrance-wrap')) entWrap.classList.remove('open');
+    if (oscWrap && !e.target.closest('#osc-wrap')) oscWrap.classList.remove('open');
   });
 
   // ---------- projector sync receive + snapshot ----------
@@ -3870,6 +5606,13 @@ void main() {
   // Single shared dispatcher for both BroadcastChannel and window.message,
   // so adding the second transport doesn't double-apply messages.
   let _lastMsgKey = '';
+  // Track what body the projector's GL/p5 has actually been compiled with.
+  // The initial GL program is built from DEFAULT_CUSTOM_BODY (see boot
+  // section), so even if state.customBody from localStorage matches the
+  // controller's, we still need to recompile on first snapshot for the
+  // projection to show the user's actual code.
+  let _projectorAppliedGLSL = null;
+  let _projectorAppliedP5   = null;
   function _dispatchSyncMsg(msg) {
     if (!msg || !msg.__704sync) return;
     // De-dupe: bc + postMessage may both deliver the same message. The
@@ -3904,29 +5647,39 @@ void main() {
             state.customMode = payload.customMode === 'p5' ? 'glsl' : 'p5';
             setMode(payload.customMode);
           }
-          const _bodyChanged =
-            (state.customMode === 'p5' && payload.p5Body     && payload.p5Body     !== state.p5Body) ||
-            (state.customMode !== 'p5' && payload.customBody && payload.customBody !== state.customBody);
           if (payload.customBody) state.customBody = payload.customBody;
           if (payload.p5Body)     state.p5Body     = payload.p5Body;
           if (payload.entrance) _applyEntranceFromSync(payload.entrance);
-          // Only run the heavy recompile path when the body actually
-          // changed. Repeated snapshots (e.g., re-handshake after a focus
-          // event) used to delete + rebuild the GL program every time,
-          // which caused a brief blank frame and made fast Custom↔Aurora
-          // toggling appear "stuck" / produce a white flash.
-          if (_bodyChanged) {
-            if (state.customMode === 'p5') applyP5(state.p5Body);
-            else                            applyGLSL(state.customBody);
-          }
-          // If the controller is on a non-custom built-in, override.
+          // If the controller is on a built-in shader other than Custom,
+          // just switch to it (no body to apply).
           if (payload.activeIdx != null && payload.activeIdx !== CUSTOM_IDX) {
             activateShader(payload.activeIdx);
-          } else if (payload.activeFavId) {
-            loadFav(payload.activeFavId);
-          } else if (payload.activeIdx === CUSTOM_IDX) {
-            // Make sure Custom is active even when we skipped recompile.
-            activateShader(CUSTOM_IDX);
+            activeFavId = null;
+          } else {
+            // Custom (with or without favorite). Apply body directly from
+            // payload — do NOT call loadFav(id) here, because the projector
+            // window's localStorage may not yet reflect favs saved on the
+            // controller side. The body is already in payload.customBody /
+            // p5Body, so we can apply without lookup.
+            // Compare against what we've actually compiled, not just
+            // state.customBody — the initial GL program is DEFAULT_CUSTOM_BODY
+            // even when state.customBody differs (loaded from localStorage).
+            const needApplyGLSL = state.customMode !== 'p5' &&
+              state.customBody && state.customBody !== _projectorAppliedGLSL;
+            const needApplyP5 = state.customMode === 'p5' &&
+              state.p5Body && state.p5Body !== _projectorAppliedP5;
+            if (needApplyGLSL) {
+              applyGLSL(state.customBody);
+              _projectorAppliedGLSL = state.customBody;
+            } else if (needApplyP5) {
+              applyP5(state.p5Body);
+              _projectorAppliedP5 = state.p5Body;
+            } else {
+              // Make sure Custom is active even when we skipped recompile.
+              setActive(CUSTOM_IDX);
+            }
+            activeFavId = payload.activeFavId || null;
+            if (typeof updateActiveTileClasses === 'function') updateActiveTileClasses();
           }
         } else if (type === 'activate') {
           if (payload.favId)              loadFav(payload.favId);
@@ -3935,10 +5688,18 @@ void main() {
           if (codeTA) codeTA.value = payload.body;
           state.customBody = payload.body;
           applyGLSL(payload.body);
+          _projectorAppliedGLSL = payload.body;
+          // Track which favorite (if any) this body came from so the
+          // projector's activeFavId stays in sync with the controller.
+          activeFavId = payload.favId || null;
+          if (typeof updateActiveTileClasses === 'function') updateActiveTileClasses();
         } else if (type === 'p5') {
           if (codeTA) codeTA.value = payload.body;
           state.p5Body = payload.body;
           applyP5(payload.body);
+          _projectorAppliedP5 = payload.body;
+          activeFavId = payload.favId || null;
+          if (typeof updateActiveTileClasses === 'function') updateActiveTileClasses();
         } else if (type === 'mode') {
           if (payload.mode && payload.mode !== state.customMode) setMode(payload.mode);
         } else if (type === 'entrance') {
@@ -3949,7 +5710,14 @@ void main() {
         } else if (type === 'click') {
           const t = (performance.now() / 1000) - state.startTime;
           state.clicks.push({ dir: payload.dir, t, vx: payload.vx, vy: payload.vy });
-          if (state.clicks.length > 8) state.clicks.shift();
+          if (state.clicks.length > 32) state.clicks.shift();
+        } else if (type === 'drag') {
+          // TouchService move sample mirrored from the controller. Stamp with
+          // this window's own clock so the dragTrail() age math stays correct
+          // even if the two windows started at slightly different times.
+          const t = (performance.now() / 1000) - state.startTime;
+          state.drags.push({ dir: payload.dir, t, id: payload.id });
+          if (state.drags.length > 32) state.drags.shift();
         } else if (type === 'go-fullscreen') {
           // Ignored intentionally. Chrome configurations that reject
           // external fullscreen activation need the gesture to originate
@@ -4007,6 +5775,470 @@ void main() {
   //     when the host viewport is sized to 2688:3840
   const broadcastBtn = document.getElementById('btn-broadcast');
   const broadcastHud = document.getElementById('broadcast-hud');
+  const IS_ELECTRON_PROJECTOR = IS_ELECTRON_PROJECTOR_PARAM;
+  if (IS_ELECTRON_PROJECTOR && broadcastHud) broadcastHud.remove();
+  const electron704 = window.electron704 || null;
+  let _electronProjectorOpen = false;
+  if (electron704) {
+    electron704.onProjectorState((isOpen) => {
+      _electronProjectorOpen = isOpen;
+      if (typeof _updateBroadcastBtnState === 'function') _updateBroadcastBtnState();
+    });
+    electron704.isProjectorOpen().then((isOpen) => {
+      _electronProjectorOpen = isOpen;
+      if (typeof _updateBroadcastBtnState === 'function') _updateBroadcastBtnState();
+    }).catch(() => {});
+  }
+
+  // ---------- OSC monitor panel ----------
+  // A live log of incoming OSC messages + buttons to reset dock order and
+  // wipe favorites. Opens via the wave icon in the dock; auto-closes on
+  // outside click (same pattern as quality / capture / entrance menus).
+  const oscWrap        = document.getElementById('osc-wrap');
+  const oscBtn         = document.getElementById('btn-osc');
+  const oscMenuEl      = document.getElementById('osc-menu');
+  const oscLogEl       = document.getElementById('osc-log');
+  const oscPopText     = document.getElementById('osc-pop-text');
+  const oscPopDot      = document.getElementById('osc-pop-dot');
+  const oscClearLogBtn = document.getElementById('osc-clear-log');
+  const oscResetOrderBtn = document.getElementById('osc-reset-order');
+
+  const OSC_LOG_MAX = 60;
+  const oscLog = [];
+
+  function _pad2(n) { return String(n).padStart(2, '0'); }
+  function _fmtTime(d) { return _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()) + ':' + _pad2(d.getSeconds()); }
+
+  function renderOSCLog() {
+    if (!oscLogEl) return;
+    if (oscLog.length === 0) {
+      oscLogEl.innerHTML = '<div class="osc-log-empty">No messages yet — push a TouchOSC button.</div>';
+      return;
+    }
+    oscLogEl.innerHTML = '';
+    for (const entry of oscLog) {
+      const row = document.createElement('div');
+      row.className = 'osc-log-row';
+      row.innerHTML =
+        '<span class="ts">' + entry.time + '</span>' +
+        '<span class="addr"></span>' +
+        '<span class="args"></span>';
+      row.querySelector('.addr').textContent = entry.address;
+      row.querySelector('.args').textContent = ' [' + (entry.args || []).join(', ') + ']';
+      oscLogEl.appendChild(row);
+    }
+    oscLogEl.scrollTop = oscLogEl.scrollHeight;
+  }
+
+  function pushOSCEntry(address, args) {
+    oscLog.push({ time: _fmtTime(new Date()), address: address, args: args || [] });
+    if (oscLog.length > OSC_LOG_MAX) oscLog.shift();
+    // Only repaint the log if the OSC monitor panel is actually open. With
+    // many OSC messages per second this saved a measurable chunk of main
+    // thread time during shader switching.
+    if (oscWrap && oscWrap.classList.contains('open')) renderOSCLog();
+  }
+
+  function renderOSCPanelStatus(s) {
+    if (!oscPopText || !oscPopDot) return;
+    if (!s) { oscPopText.textContent = 'offline'; oscPopDot.classList.remove('ok'); return; }
+    if (s.lastError) {
+      oscPopText.textContent = 'error: ' + s.lastError;
+      oscPopDot.classList.remove('ok');
+      return;
+    }
+    if (!s.listening) {
+      oscPopText.textContent = 'starting…';
+      oscPopDot.classList.remove('ok');
+      return;
+    }
+    oscPopText.textContent = 'listening on udp://0.0.0.0:' + s.port + ' · ' + s.msgCount + ' msgs';
+    oscPopDot.classList.add('ok');
+  }
+
+  if (oscBtn && oscWrap) {
+    oscBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opening = !oscWrap.classList.contains('open');
+      oscWrap.classList.toggle('open');
+      // pushOSCEntry skips rendering while closed for perf; catch up now.
+      if (opening) renderOSCLog();
+    });
+  }
+  if (oscClearLogBtn) {
+    oscClearLogBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      oscLog.length = 0;
+      renderOSCLog();
+    });
+  }
+  if (oscResetOrderBtn) {
+    oscResetOrderBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const ok = await inlineConfirm(
+        '把 dock 順序還原成 Aurora → 你的收藏(存入順序)→ Custom?\n收藏本身不會被刪。',
+        { confirmLabel: '還原順序' }
+      );
+      if (!ok) return;
+      try { localStorage.removeItem(DOCK_ORDER_KEY); } catch (err) {}
+      rebuildDock();
+      console.log('[reorder] dock order reset to default');
+    });
+  }
+
+  // ---------- OSC playlist ----------
+  // Optional layer on top of dock order: an explicit array of entry IDs that
+  // maps OSC slot N → effect. When enabled, /704/shader N looks up
+  // playlist[N] instead of dockEntries[N], so the user can include only the
+  // effects they actually want on TouchOSC and pick the slot for each.
+  //
+  // Slot value is one of:
+  //   "aurora" | "custom" | "fav:<favId>"  — activates that effect
+  //   null                                 — empty slot, OSC N is a no-op
+  const PLAYLIST_KEY    = 'shaderWallpapers.venue.oscPlaylist.v1';
+  const PLAYLIST_EN_KEY = 'shaderWallpapers.venue.oscPlaylistEnabled.v1';
+  function loadPlaylist() {
+    try {
+      const raw = localStorage.getItem(PLAYLIST_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function savePlaylist(arr) {
+    try { localStorage.setItem(PLAYLIST_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+  function loadPlaylistEnabled() {
+    try { return localStorage.getItem(PLAYLIST_EN_KEY) === '1'; } catch (e) { return false; }
+  }
+  function savePlaylistEnabled(on) {
+    try { localStorage.setItem(PLAYLIST_EN_KEY, on ? '1' : '0'); } catch (e) {}
+  }
+  const PLAYLIST_SYNC_KEY = 'shaderWallpapers.venue.oscPlaylistSync.v1';
+  function loadPlaylistSync() {
+    try {
+      const v = localStorage.getItem(PLAYLIST_SYNC_KEY);
+      return v === null ? true : v === '1';   // default ON
+    } catch (e) { return true; }
+  }
+  function savePlaylistSync(on) {
+    try { localStorage.setItem(PLAYLIST_SYNC_KEY, on ? '1' : '0'); } catch (e) {}
+  }
+  // Mirror the current visible dock order into a playlist array. Hidden
+  // built-ins and missing favs are dropped so slot N always lines up with the
+  // tile the user sees in dock position N.
+  function buildDockMirror() {
+    const hidden = loadHiddenBuiltins();
+    const favs   = loadFavs();
+    const favIds = new Set(favs.map(f => f.id));
+    const order  = effectiveDockOrder();
+    const out = [];
+    for (const id of order) {
+      if (id === 'aurora') {
+        if (!hidden.includes('aurora')) out.push('aurora');
+      } else if (id === 'custom') {
+        if (!hidden.includes('custom')) out.push('custom');
+      } else if (typeof id === 'string' && id.startsWith('fav:')) {
+        if (favIds.has(id.slice(4))) out.push(id);
+      }
+    }
+    return out;
+  }
+  // Called from rebuildDock and from the sync-toggle handler. When sync is on
+  // we keep the OSC playlist == visible dock order, and auto-enable playlist
+  // so /704/shader N always means the same as the badge on dock tile N.
+  function syncPlaylistFromDock() {
+    if (!loadPlaylistSync()) return;
+    const mirror = buildDockMirror();
+    const cur = loadPlaylist();
+    if (JSON.stringify(cur) === JSON.stringify(mirror)) return;
+    savePlaylist(mirror);
+    if (!loadPlaylistEnabled()) savePlaylistEnabled(true);
+  }
+  function reconcilePlaylist(arr) {
+    const favIds = new Set(loadFavs().map(f => f.id));
+    return arr.map(e => {
+      if (e === 'aurora' || e === 'custom' || e === null) return e;
+      if (typeof e === 'string' && e.startsWith('fav:')) {
+        return favIds.has(e.slice(4)) ? e : null;
+      }
+      return null;
+    });
+  }
+  function activePlaylist() {
+    if (!loadPlaylistEnabled()) return [];
+    return reconcilePlaylist(loadPlaylist());
+  }
+  function activateByEntryId(entryId) {
+    if (!entryId) return;
+    const fromDock = dockEntries.find(e =>
+      (entryId === 'aurora' && e.kind === 'shader' && SHADERS[e.shaderIdx] && SHADERS[e.shaderIdx].id === 'aurora') ||
+      (entryId === 'custom' && e.kind === 'shader' && e.shaderIdx === CUSTOM_IDX) ||
+      (entryId.startsWith('fav:') && e.kind === 'fav' && e.favId === entryId.slice(4))
+    );
+    if (fromDock) { activateEntry(fromDock); return; }
+    if (entryId === 'aurora') {
+      const i = SHADERS.findIndex(s => s.id === 'aurora');
+      if (i >= 0) activateShader(i);
+    } else if (entryId === 'custom') {
+      activateShader(CUSTOM_IDX);
+    } else if (entryId.startsWith('fav:')) {
+      loadFav(entryId.slice(4));
+    }
+  }
+
+  function availableEffects() {
+    const favs = loadFavs();
+    return [
+      { id: 'aurora', name: 'Aurora (built-in)' },
+      ...favs.map(f => ({ id: 'fav:' + f.id, name: '★ ' + f.name + (f.mode === 'p5' ? ' (p5)' : '') })),
+      { id: 'custom', name: 'Custom (built-in)' },
+    ];
+  }
+  function renderPlaylist() {
+    // Lazy DOM lookup inside the function so this is safe to call from
+    // anywhere (e.g. renderFavs during early init, before the outer const
+    // refs would be initialized).
+    const plListEl      = document.getElementById('osc-playlist');
+    if (!plListEl) return;
+    const plEnableEl    = document.getElementById('osc-playlist-enable');
+    const plToggleLabel = document.getElementById('osc-playlist-toggle-label');
+    const plSyncEl      = document.getElementById('osc-playlist-sync');
+    const plSyncLabel   = document.getElementById('osc-playlist-sync-label');
+    const list = reconcilePlaylist(loadPlaylist());
+    const enabled = loadPlaylistEnabled();
+    const syncOn  = loadPlaylistSync();
+    plListEl.classList.toggle('disabled', !enabled);
+    plListEl.classList.toggle('synced', syncOn);
+    if (plEnableEl) {
+      plEnableEl.checked  = enabled;
+      // Sync forces playlist enable on; lock the toggle so the UI tells the truth.
+      plEnableEl.disabled = syncOn;
+    }
+    if (plToggleLabel) {
+      plToggleLabel.classList.toggle('active', enabled);
+      plToggleLabel.title = syncOn
+        ? 'Sync 開啟時自動啟用 — 關掉 Sync 才能手動切換'
+        : '開啟後,/704/shader N 改成查 playlist 第 N 格,而不是 dock 第 N 格';
+    }
+    if (plSyncEl) plSyncEl.checked = syncOn;
+    if (plSyncLabel) plSyncLabel.classList.toggle('active', syncOn);
+    // Add/Copy buttons are redundant when sync is on (the list is auto-built
+    // from dock). Disable them so the UI matches behavior.
+    const plAddBtn  = document.getElementById('osc-playlist-add');
+    const plCopyBtn = document.getElementById('osc-playlist-from-dock');
+    if (plAddBtn)  plAddBtn.disabled  = syncOn;
+    if (plCopyBtn) plCopyBtn.disabled = syncOn;
+    if (!list.length) {
+      plListEl.innerHTML = syncOn
+        ? '<div class="pl-empty">Dock 是空的 — 加 favorite 就會出現在這裡。</div>'
+        : '<div class="pl-empty">No slots yet — click "+ Add slot" or "Copy from dock".</div>';
+      return;
+    }
+    const effects = availableEffects();
+    plListEl.innerHTML = '';
+    if (syncOn) {
+      const banner = document.createElement('div');
+      banner.className = 'pl-sync-banner';
+      banner.textContent = '🔄 Sync 開啟中 — 在 dock 拖曳即可改 OSC 順序';
+      plListEl.appendChild(banner);
+    }
+    list.forEach((slotVal, idx) => {
+      const row = document.createElement('div');
+      row.className = 'pl-row';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'pl-idx';
+      lbl.textContent = 'slot ' + idx;
+      row.appendChild(lbl);
+
+      const sel = document.createElement('select');
+      sel.className = 'pl-select';
+      const empty = document.createElement('option');
+      empty.value = '__empty__';
+      empty.textContent = '— Empty —';
+      sel.appendChild(empty);
+      effects.forEach(eff => {
+        const opt = document.createElement('option');
+        opt.value = eff.id;
+        opt.textContent = eff.name;
+        sel.appendChild(opt);
+      });
+      sel.value = slotVal == null ? '__empty__' : slotVal;
+      sel.addEventListener('change', () => {
+        const arr = loadPlaylist();
+        arr[idx] = sel.value === '__empty__' ? null : sel.value;
+        savePlaylist(arr);
+        renderPlaylist();
+        rebuildDock();
+      });
+      row.appendChild(sel);
+
+      const del = document.createElement('button');
+      del.className = 'pl-del';
+      del.textContent = '×';
+      del.title = '刪掉 slot ' + idx + '(後面的會往前遞補)';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const arr = loadPlaylist();
+        arr.splice(idx, 1);
+        savePlaylist(arr);
+        renderPlaylist();
+        rebuildDock();
+      });
+      row.appendChild(del);
+
+      plListEl.appendChild(row);
+    });
+  }
+  {
+    const plEnableEl = document.getElementById('osc-playlist-enable');
+    const plAddBtn   = document.getElementById('osc-playlist-add');
+    const plCopyBtn  = document.getElementById('osc-playlist-from-dock');
+    const plSyncEl   = document.getElementById('osc-playlist-sync');
+    if (plSyncEl) {
+      plSyncEl.addEventListener('change', (e) => {
+        e.stopPropagation();
+        savePlaylistSync(plSyncEl.checked);
+        renderPlaylist();
+        rebuildDock();   // triggers syncPlaylistFromDock() inside
+      });
+    }
+    if (plEnableEl) {
+      plEnableEl.addEventListener('change', (e) => {
+        e.stopPropagation();
+        savePlaylistEnabled(plEnableEl.checked);
+        renderPlaylist();
+        rebuildDock();
+      });
+    }
+    if (plAddBtn) {
+      plAddBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const arr = loadPlaylist();
+        arr.push(null);
+        savePlaylist(arr);
+        renderPlaylist();
+        rebuildDock();
+      });
+    }
+    if (plCopyBtn) {
+      plCopyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const arr = dockEntries.map(de => {
+          if (de.kind === 'shader') {
+            const s = SHADERS[de.shaderIdx];
+            if (!s) return null;
+            return s.id === 'aurora' ? 'aurora' : (s.id === 'custom' ? 'custom' : null);
+          }
+          if (de.kind === 'fav') return 'fav:' + de.favId;
+          return null;
+        });
+        savePlaylist(arr);
+        savePlaylistEnabled(true);
+        renderPlaylist();
+        rebuildDock();
+      });
+    }
+  }
+
+  renderPlaylist();
+
+  // ---------- OSC control (TouchOSC etc.) ----------
+  // Schema (all addresses listen on the udp port reported in the sys-pill):
+  //   /704/shader N           — int: activate dock entry at position N (0-based)
+  //   /704/shader/select N    — alias of above
+  //   /704/shader/next [v]    — cycle forward in dock (v omitted or v>0 = trigger)
+  //   /704/shader/prev [v]    — cycle backward
+  // Projector window doesn't bind OSC: only the controller receives, then
+  // syncSend() propagates the shader change to the projector via the
+  // existing BroadcastChannel sync.
+  const oscStatusEl = document.getElementById('osc-status');
+  function renderOSCStatus(s) {
+    if (!oscStatusEl) return;
+    if (!s) { oscStatusEl.textContent = 'osc · —'; return; }
+    if (s.lastError) {
+      oscStatusEl.textContent = 'osc · err';
+      oscStatusEl.title = 'OSC error: ' + s.lastError;
+      return;
+    }
+    if (!s.listening) { oscStatusEl.textContent = 'osc · …'; return; }
+    oscStatusEl.textContent = 'osc · ' + s.port + (s.msgCount ? ' · ' + s.msgCount : '');
+    oscStatusEl.title = 'OSC :' + s.port + ' · ' + s.msgCount + ' msgs'
+      + (s.lastAddress ? ' · last: ' + s.lastAddress : '')
+      + '\nSend /704/shader N (int), /704/shader/next, /704/shader/prev';
+  }
+  if (electron704 && !IS_PROJECTOR && electron704.onOSC) {
+    electron704.onOSC((msg) => {
+      if (!msg || typeof msg.address !== 'string') return;
+      const addr = msg.address;
+      const args = Array.isArray(msg.args) ? msg.args : [];
+      // Log every message regardless of whether it's a known address — helps
+      // the user spot typos in TouchOSC quickly.
+      pushOSCEntry(addr, args);
+      const firstNum = args.length ? Number(args[0]) : NaN;
+      const isTrigger = !args.length || (Number.isFinite(firstNum) && firstNum > 0);
+      const playlist = activePlaylist();   // [] if disabled / empty
+      if (addr === '/704/shader' || addr === '/704/shader/select') {
+        if (!Number.isFinite(firstNum) || firstNum < 0) return;
+        const idx = Math.floor(firstNum);
+        if (playlist.length) {
+          if (idx < playlist.length) activateByEntryId(playlist[idx]);
+        } else {
+          if (idx < dockEntries.length) activateEntry(dockEntries[idx]);
+        }
+      } else if (addr === '/704/shader/next' || addr === '/704/shader/prev') {
+        if (!isTrigger) return;
+        const dir = addr.endsWith('/next') ? +1 : -1;
+        if (playlist.length) {
+          // Walk playlist slots, skipping empties; cycle past current.
+          const nonEmpty = playlist.map((v, i) => ({ v, i })).filter(x => x.v != null);
+          if (!nonEmpty.length) return;
+          // Find current active among playlist
+          let curArrayPos = -1;
+          for (let k = 0; k < nonEmpty.length; k++) {
+            const ent = nonEmpty[k].v;
+            const isActive = dockEntries.some(de =>
+              ((ent === 'aurora' && de.kind === 'shader' && SHADERS[de.shaderIdx] && SHADERS[de.shaderIdx].id === 'aurora') ||
+               (ent === 'custom' && de.kind === 'shader' && de.shaderIdx === CUSTOM_IDX && activeFavId == null) ||
+               (typeof ent === 'string' && ent.startsWith('fav:') && de.kind === 'fav' && de.favId === ent.slice(4) && activeFavId === de.favId))
+              && de.tile && de.tile.classList.contains('active')
+            );
+            if (isActive) { curArrayPos = k; break; }
+          }
+          const next = (curArrayPos + dir + nonEmpty.length) % nonEmpty.length;
+          activateByEntryId(nonEmpty[next].v);
+        } else {
+          cycleDock(dir);
+        }
+      }
+    });
+    const _onStatus = (s) => { renderOSCStatus(s); renderOSCPanelStatus(s); };
+    electron704.onOSCStatus(_onStatus);
+    electron704.getOSCStatus().then(_onStatus).catch(() => {});
+  } else if (!electron704 && oscStatusEl) {
+    // Web/browser mode — no IPC, OSC pill stays as "—".
+    oscStatusEl.textContent = 'osc · n/a';
+    oscStatusEl.title = 'OSC needs the Electron app (npm start / .exe).';
+  }
+
+  // ---------- one-shot migration: remove old auto-seeded snippets ----------
+  // Earlier versions of this app populated favorites from glsl_snippets/ on
+  // first run. We no longer do that — the user owns the dock order so OSC
+  // indices map to their own arrangement, not ours. This migration cleans
+  // up any leftover seeded entries (id prefix "snippet_") exactly once, so
+  // existing installs end up matching a fresh one. User-saved favorites
+  // (any other id prefix) are preserved untouched.
+  const MIGRATION_KEY = 'shaderWallpapers.venue.migration.dropSeed.v1';
+  if (!IS_PROJECTOR && !localStorage.getItem(MIGRATION_KEY)) {
+    const favs = loadFavs();
+    const kept = favs.filter(f => !String(f.id || '').startsWith('snippet_'));
+    if (kept.length !== favs.length) {
+      saveFavs(kept);
+      console.log('[migrate] removed', favs.length - kept.length, 'auto-seeded snippets');
+    }
+    try { localStorage.setItem(MIGRATION_KEY, '1'); } catch (e) {}
+  }
   let _qualityBeforeBroadcast = null;
   let _hudFadeTimer = null;
 
@@ -4022,9 +6254,11 @@ void main() {
       // Auto-fade the HUD after 4s so it doesn't bleed into capture if
       // the viewport accidentally includes it. The HUD still works on
       // hover to confirm broadcast is on.
-      broadcastHud.classList.remove('faded');
-      if (_hudFadeTimer) clearTimeout(_hudFadeTimer);
-      _hudFadeTimer = setTimeout(() => broadcastHud.classList.add('faded'), 4000);
+      if (broadcastHud) {
+        broadcastHud.classList.remove('faded');
+        if (_hudFadeTimer) clearTimeout(_hudFadeTimer);
+        _hudFadeTimer = setTimeout(() => broadcastHud.classList.add('faded'), 4000);
+      }
     } else {
       if (_qualityBeforeBroadcast != null) {
         state.quality = _qualityBeforeBroadcast;
@@ -4057,6 +6291,7 @@ void main() {
   // The old in-window broadcast (UI-hide on this same tab) is still
   // available via the B key for quick OBS Browser Source capture.
   function _isProjecting() {
+    if (electron704) return _electronProjectorOpen;
     return !!(_projectorWin && !_projectorWin.closed);
   }
   function _updateBroadcastBtnState() {
@@ -4065,7 +6300,64 @@ void main() {
   // The user can manually close the projector window — poll so the
   // button reverts from red without needing a controller-side action.
   setInterval(_updateBroadcastBtnState, 1000);
-  broadcastBtn.addEventListener('click', () => {
+  broadcastBtn.addEventListener('click', async () => {
+    if (electron704) {
+      if (_isProjecting()) {
+        electron704.closeProjector().then((isOpen) => {
+          _electronProjectorOpen = !!isOpen;
+          syncSend('close-projector', {});
+          _updateBroadcastBtnState();
+        }).catch(() => {});
+        return;
+      }
+      // Show display picker in Electron mode too, mirroring the web flow.
+      try {
+        const displays = await electron704.listDisplays();
+        const items = (displays || []).map((d) => ({
+          label: d.label + (d.isPrimary ? ' · primary' : ''),
+          meta: (d.size && d.size.width ? d.size.width : d.bounds.width)
+              + '×' + (d.size && d.size.height ? d.size.height : d.bounds.height),
+          onSelect: async () => {
+            try {
+              await electron704.openProjectorOn(d.id);
+              _electronProjectorOpen = true;
+              _updateBroadcastBtnState();
+            } catch (e) { /* ignore */ }
+          },
+        }));
+        // Add Windowed mode at the top — for NDI Screen Capture HX / OBS
+        // window-capture pipelines, where you want the projector as a movable
+        // resizable window on display 1 instead of fullscreen on display N.
+        if (electron704.openWindowedProjector) {
+          items.unshift({
+            label: '🪟 Windowed mode',
+            meta: 'NDI / capture',
+            onSelect: async () => {
+              try {
+                await electron704.openWindowedProjector();
+                _electronProjectorOpen = true;
+                _updateBroadcastBtnState();
+              } catch (e) { /* ignore */ }
+            },
+          });
+        }
+        if (!items.length) {
+          // Defensive fallback: no displays reported, just auto-open.
+          electron704.toggleProjector().then((isOpen) => {
+            _electronProjectorOpen = isOpen;
+            _updateBroadcastBtnState();
+          }).catch(() => {});
+          return;
+        }
+        _showScreenPop(items, broadcastBtn);
+      } catch (e) {
+        electron704.toggleProjector().then((isOpen) => {
+          _electronProjectorOpen = isOpen;
+          _updateBroadcastBtnState();
+        }).catch(() => {});
+      }
+      return;
+    }
     if (_isProjecting()) {
       try { _projectorWin.close(); } catch (e) { /* ignore */ }
       try { syncSend('close-projector', {}); } catch (e) { /* ignore */ }
@@ -4184,6 +6476,13 @@ void main() {
       b.innerHTML = '<span>' + it.label + '</span><b>' + it.meta + '</b>';
       b.addEventListener('click', async () => {
         _hideScreenPop();
+        // Electron path: item carries its own opener (calls IPC into
+        // the main process). Web path falls through to the gesture-
+        // sensitive Chrome window.open() flow below.
+        if (typeof it.onSelect === 'function') {
+          try { await it.onSelect(); } catch (e) { /* ignore */ }
+          return;
+        }
         // Chrome's fullscreen-popup feature only engages when the
         // window.open() call is inside the same user-gesture stack frame
         // that *also* dereferences a ScreenDetailed. Re-resolving the
@@ -4261,7 +6560,18 @@ void main() {
   }
   // (Right-click previously opened the picker; left-click does it now,
   //  so the contextmenu handler is intentionally not registered.)
-  broadcastHud.addEventListener('click', () => setBroadcast(false));
+  if (broadcastHud) {
+    broadcastHud.addEventListener('click', () => {
+      if (electron704) {
+        electron704.closeProjector().then(() => {
+          _electronProjectorOpen = false;
+          _updateBroadcastBtnState();
+        }).catch(() => {});
+        return;
+      }
+      setBroadcast(false);
+    });
+  }
 
   // ---------- external integration hooks ----------
   // Expose the venue canvas + a captureStream() helper so tools that can
