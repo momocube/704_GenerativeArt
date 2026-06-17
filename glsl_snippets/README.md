@@ -25,6 +25,10 @@
 | `08_circle_packing.glsl`     | Circle Packing 圓形堆疊 | 多尺度呼吸圓 | 直接用 3D dir，天生無縫 |
 | `09_704_bounce.glsl`         | 704 Bounce 數字彈跳 | 巨型白色「704」場域彈跳，點擊抖動 | lon 環繞用 `mod`，文字本地座標連續 |
 | `10_704_swarm.glsl`          | 704 Swarm 小數字漂浮 | 100 個小「704」3D 漂浮，重疊時 SDF 融合 | gnomonic 投影，遠近自動縮放 |
+| `14_cell_grid.glsl`          | Cell Grid 閃動格子 (CyberCube) | 五面 0.25m 物理格 + Matrix 字流 (c y b e r u 0 4 7) + 5 色 Abyss Mirror 配色 + click/drag 雙通道 | ray-box(用實際 5.5×8×2.5m + EYE_H=1.6 算)|
+| `15_mirror_pool.glsl`        | Mirror Pool 鏡映水波 | 地板暗池漣漪 + 天花板鏡映 + 牆面水位線發光,click 像扔石頭,drag 連續波 | ray-box 投影水面位置,天/地對稱 |
+| `16_particle_field.glsl`     | Particle Field 粒子流場 | 32 顆 brand 色粒子沿弧線漂浮,click 推開附近粒子,drag 留亮青光跡 | 3D dir 球面分布,天生無縫 |
+| `17_sonar_sweep.glsl`        | Sonar Sweep 雷達掃描 | 中央 4 秒週期掃描環 + 每個 click 變獨立 ping 源(brand 色) + lat/lon 雷達盤格線 + vignette | 整數環繞 lat 8 / lon 16 |
 | `18_night_city.glsl`         | Night City 夜之城天際線 | 360° 摩天樓剪影 + 黃 / 青 / 粉窗光 + 漂浮霓虹招牌 + 紫粉天空，點擊閃電、拖曳桃紫光跡 | 48 整數欄環繞 + 3D hash 窗 |
 
 ## 無縫原理速記

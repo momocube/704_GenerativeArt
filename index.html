@@ -1076,6 +1076,37 @@
     -webkit-appearance: none;
     margin: 0;
   }
+  .entrance-menu .ent-row-flip {
+    gap: 8px;
+  }
+  .entrance-menu .ent-flip-toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 0;
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .entrance-menu .ent-flip-toggle input { display: none; }
+  .entrance-menu .ent-flip-toggle:hover {
+    background: rgba(244,246,250,0.06);
+    color: var(--ink);
+  }
+  .entrance-menu .ent-flip-toggle:has(input:checked) {
+    background: rgba(6,212,255,0.16);
+    border-color: rgba(6,212,255,0.6);
+    color: #06d4ff;
+  }
   .entrance-menu .ent-reset {
     margin-top: 4px;
     width: 100%;
@@ -1673,7 +1704,12 @@
             <input type="range" id="ent-image-rot" min="-180" max="180" step="1" value="0" />
             <input type="number" id="ent-image-rot-val" class="ent-val-input" min="-360" max="360" step="1" value="0" />
           </label>
-          <button class="ent-reset" id="ent-image-reset" title="Reset scale and rotation">Reset transform</button>
+          <label class="ent-row ent-row-flip">
+            <span>Flip</span>
+            <label class="ent-flip-toggle"><input type="checkbox" id="ent-image-flipx" /><span>X</span></label>
+            <label class="ent-flip-toggle"><input type="checkbox" id="ent-image-flipy" /><span>Y</span></label>
+          </label>
+          <button class="ent-reset" id="ent-image-reset" title="Reset scale, rotation and flips">Reset transform</button>
         </div>
         <div class="ent-body ent-body-shader" data-body="shader" style="display:none">
           <label class="ent-row">
@@ -1873,6 +1909,7 @@ uniform int       u_entranceShaderId; // 0=aurora, 1=custom, 2=entrance custom
 uniform float     u_entranceImageScale;  // 1.0 = contain-fit image, >1 zooms in
 uniform float     u_entranceImageRot;    // radians, image rotated around its center
 uniform float     u_entranceImageAspect; // image width / height
+uniform vec2      u_entranceImageFlip;   // (±1, ±1):-1=該軸鏡像翻轉
 
 // ----- venue cross layout (in 2688x3840 canvas pixel space, Y down from top) -----
 // rect = (x, y, w, h)
@@ -2116,6 +2153,8 @@ void main() {
         ? vec2(1.0, rectAspect / u_entranceImageAspect)
         : vec2(u_entranceImageAspect / rectAspect, 1.0);
       uv = uv / fit;
+      // Flip(在 rotate 之前):對源圖做鏡像,旋轉後仍直觀
+      uv *= u_entranceImageFlip;
       // Rotate
       float c = cos(u_entranceImageRot), s = sin(u_entranceImageRot);
       uv = mat2(c, -s, s, c) * uv;
@@ -2492,6 +2531,7 @@ function draw() {
       entImgScale: gl.getUniformLocation(p, 'u_entranceImageScale'),
       entImgRot:   gl.getUniformLocation(p, 'u_entranceImageRot'),
       entImgAspect:gl.getUniformLocation(p, 'u_entranceImageAspect'),
+      entImgFlip:  gl.getUniformLocation(p, 'u_entranceImageFlip'),
     };
   }
 
@@ -2589,6 +2629,7 @@ function draw() {
     if (uSet.entImgScale)  gl.uniform1f(uSet.entImgScale,  ent.imageScale || 1.0);
     if (uSet.entImgRot)    gl.uniform1f(uSet.entImgRot,    (ent.imageRot || 0) * Math.PI / 180);
     if (uSet.entImgAspect) gl.uniform1f(uSet.entImgAspect, ent.imageAspect || 1.0);
+    if (uSet.entImgFlip)   gl.uniform2f(uSet.entImgFlip,   ent.imageFlipX ? -1.0 : 1.0, ent.imageFlipY ? -1.0 : 1.0);
     if (uSet.entTex) {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, entranceTex);
@@ -2752,6 +2793,8 @@ function draw() {
       imageScale:  1.0,   // 0.1 .. 3.0
       imageRot:    0,     // degrees (-180..180)
       imageAspect: 1.0,   // computed from loaded image; persisted so reload works pre-load
+      imageFlipX:  false, // 水平鏡像翻轉
+      imageFlipY:  false, // 垂直鏡像翻轉
       shaderId: 'aurora', // 'aurora' | 'custom' | 'fav'
       // Only used when shaderId === 'fav' — body of the GLSL favorite picked.
       // Stored independently of the favorites list so the entrance keeps
@@ -5283,6 +5326,7 @@ void main() {
           entImgScale: ogl.getUniformLocation(op, 'u_entranceImageScale'),
           entImgRot:   ogl.getUniformLocation(op, 'u_entranceImageRot'),
           entImgAspect:ogl.getUniformLocation(op, 'u_entranceImageAspect'),
+          entImgFlip:  ogl.getUniformLocation(op, 'u_entranceImageFlip'),
         };
         // Pass the actual offscreen canvas size as u_res; the shader's main()
         // rescales gl_FragCoord into venue (2688×3840) space, so the hardcoded
@@ -5301,6 +5345,7 @@ void main() {
         ogl.uniform1f(u.entImgScale,  state.entrance.imageScale  || 1.0);
         ogl.uniform1f(u.entImgRot,    (state.entrance.imageRot || 0) * Math.PI / 180);
         ogl.uniform1f(u.entImgAspect, state.entrance.imageAspect || 1.0);
+        ogl.uniform2f(u.entImgFlip,   state.entrance.imageFlipX ? -1.0 : 1.0, state.entrance.imageFlipY ? -1.0 : 1.0);
         // Offscreen entrance texture (always create one so the sampler binds cleanly)
         const oTex = ogl.createTexture();
         ogl.activeTexture(ogl.TEXTURE1);
@@ -5368,6 +5413,8 @@ void main() {
   const entImgScaleV = document.getElementById('ent-image-scale-val');
   const entImgRot    = document.getElementById('ent-image-rot');
   const entImgRotV   = document.getElementById('ent-image-rot-val');
+  const entImgFlipX  = document.getElementById('ent-image-flipx');
+  const entImgFlipY  = document.getElementById('ent-image-flipy');
   const entImgReset  = document.getElementById('ent-image-reset');
 
   entBtn.addEventListener('click', (e) => {
@@ -5390,6 +5437,8 @@ void main() {
     entImgScaleV.value = scl.toFixed(2);
     entImgRot.value    = rot;
     entImgRotV.value   = rot;
+    entImgFlipX.checked = !!state.entrance.imageFlipX;
+    entImgFlipY.checked = !!state.entrance.imageFlipY;
 
     // Rebuild the shader dropdown from current favorites (GLSL only)
     entShaderSel.innerHTML = '';
@@ -5562,10 +5611,21 @@ void main() {
   entImgRot.addEventListener('input',   () => applyImageRot(entImgRot.value));
   entImgRotV.addEventListener('input',  () => applyImageRot(entImgRotV.value));
   entImgRotV.addEventListener('change', () => applyImageRot(entImgRotV.value));
-  // Reset scale + rotation back to defaults
+  // Flip X/Y toggles
+  entImgFlipX.addEventListener('change', () => {
+    state.entrance.imageFlipX = entImgFlipX.checked;
+    saveEntranceState();
+  });
+  entImgFlipY.addEventListener('change', () => {
+    state.entrance.imageFlipY = entImgFlipY.checked;
+    saveEntranceState();
+  });
+  // Reset scale + rotation + flips back to defaults
   entImgReset.addEventListener('click', () => {
     state.entrance.imageScale = 1.0;
     state.entrance.imageRot   = 0;
+    state.entrance.imageFlipX = false;
+    state.entrance.imageFlipY = false;
     refreshEntranceUI();
     saveEntranceState();
   });

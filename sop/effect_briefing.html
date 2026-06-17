@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>閃動格子 · 互動特效說明書</title>
+<style>
+  /* ============= A4 print template — DARK theme ============= */
+  @page { size: A4 portrait; margin: 0; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    color: #ffffff;
+    background: #050505;
+    padding-bottom: 80px;
+  }
+
+  /* ---------- 頁 ---------- */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 16mm 18mm 14mm 18mm;
+    background: #0a0c10;
+    position: relative;
+    page-break-after: always;
+    margin: 8mm auto;
+    box-shadow: 0 4px 28px rgba(6,212,255,.06), 0 0 0 1px rgba(255,255,255,.04);
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-of-type { page-break-after: auto; }
+
+  /* ---------- 品牌列 ---------- */
+  .brand {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font: 700 9pt 'Roboto Mono', 'DM Mono', 'Consolas', monospace;
+    letter-spacing: 0.16em;
+    padding-bottom: 5mm;
+    border-bottom: 1.5px solid #06d4ff;
+    color: #b8b8b8;
+  }
+  .brand .left { color: #06d4ff; }
+  .brand .left::before { content: "■  "; }
+
+  /* ---------- 大標題區 ---------- */
+  .header { margin-top: 10mm; }
+  .eyebrow {
+    font: 700 10pt 'Roboto Mono', monospace;
+    color: #06d4ff;
+    letter-spacing: 0.12em;
+    margin-bottom: 6mm;
+    opacity: 0.85;
+  }
+  .title-zh {
+    font-size: 54pt;
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    margin: 0 0 3mm 0;
+  }
+  .title-en {
+    font: 700 14pt 'Roboto Mono', monospace;
+    color: #06d4ff;
+    letter-spacing: 0.18em;
+    margin: 0;
+  }
+
+  /* ---------- 擷取圖區(方形,可調尺寸) ---------- */
+  .capture {
+    margin: 10mm auto 0;
+    width: 130mm;
+    height: 130mm;
+    background: #050810;
+    border: 1px solid #1a2230;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font: 700 9pt 'Roboto Mono', monospace;
+    letter-spacing: 0.18em;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+  }
+  .capture::before {
+    content: "";
+    position: absolute;
+    top: 4mm; left: 4mm; right: 4mm; bottom: 4mm;
+    border: 1px dashed rgba(6,212,255,.10);
+    pointer-events: none;
+  }
+  .capture img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+  .capture .placeholder {
+    opacity: .45;
+    color: #06d4ff;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .capture .placeholder small {
+    display: block;
+    font-size: 8pt;
+    color: #666;
+    margin-top: 4mm;
+  }
+
+  /* ---------- 互動說明區 ---------- */
+  .description {
+    margin-top: 10mm;
+    flex: 1;
+  }
+  .desc-label {
+    font: 700 10pt 'Roboto Mono', monospace;
+    color: #06d4ff;
+    letter-spacing: 0.18em;
+    margin-bottom: 5mm;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .desc-label::before {
+    content: "//";
+    color: #06d4ff;
+    font-weight: 900;
+  }
+  .desc-body {
+    font-size: 11.5pt;
+    line-height: 1.85;
+    color: #e0e0e0;
+  }
+  .desc-body ul {
+    padding-left: 0;
+    margin: 0;
+    list-style: none;
+  }
+  .desc-body li {
+    padding: 3mm 0 3mm 18px;
+    position: relative;
+    border-bottom: 1px dashed rgba(255,255,255,.08);
+  }
+  .desc-body li:last-child { border-bottom: none; }
+  .desc-body li::before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    top: 3mm;
+    color: #06d4ff;
+    font-weight: 900;
+  }
+  .desc-body strong {
+    color: #06d4ff;
+    font-weight: 800;
+    border-bottom: 2px solid rgba(6,212,255,.4);
+    padding: 0 1px;
+  }
+
+  /* ---------- 頁腳 ---------- */
+  .footer {
+    margin-top: auto;
+    padding-top: 6mm;
+    border-top: 1px solid rgba(255,255,255,.10);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font: 700 9pt 'Roboto Mono', monospace;
+    letter-spacing: 0.16em;
+    color: #888;
+  }
+  .footer .page-num {
+    font-size: 11pt;
+    color: #fff;
+  }
+  .footer .page-num .total {
+    font-size: 8pt;
+    color: #666;
+    margin-left: 2px;
+  }
+
+  /* =========== 編輯器 UI(只在螢幕顯示) =========== */
+
+  /* contenteditable hover/focus 提示 */
+  [contenteditable="true"] {
+    outline: none;
+    transition: background .15s;
+    border-radius: 2px;
+  }
+  [contenteditable="true"]:hover {
+    background: rgba(6,212,255,.05);
+  }
+  [contenteditable="true"]:focus {
+    background: rgba(6,212,255,.10);
+    box-shadow: 0 0 0 2px rgba(6,212,255,.4);
+  }
+
+  /* 頁內刪除鈕(hover 時浮現於右上) */
+  .page-tools {
+    position: absolute;
+    top: 6mm;
+    right: 6mm;
+    display: none;
+    gap: 4px;
+    z-index: 10;
+  }
+  .page:hover .page-tools { display: flex; }
+  .page-tools button {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.15);
+    color: #888;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font: 700 8pt 'Roboto Mono', monospace;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .page-tools button:hover {
+    background: rgba(244, 60, 60, .15);
+    border-color: rgba(244, 60, 60, .5);
+    color: #ff7878;
+  }
+
+  /* 底部浮動工具列 */
+  .editor-bar {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    background: rgba(13, 16, 22, .96);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(6,212,255,.3);
+    padding: 10px 12px;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    z-index: 100;
+  }
+  .editor-bar button {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2);
+    color: #e0e0e0;
+    padding: 8px 14px;
+    border-radius: 5px;
+    font: 700 10pt 'Roboto Mono', monospace;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .editor-bar button:hover {
+    background: rgba(6,212,255,.15);
+    border-color: #06d4ff;
+    color: #06d4ff;
+  }
+  .editor-bar button.primary {
+    background: rgba(6,212,255,.18);
+    border-color: #06d4ff;
+    color: #06d4ff;
+  }
+  .editor-bar button.danger {
+    border-color: rgba(244, 60, 60, .4);
+    color: #ff9090;
+  }
+  .editor-bar button.danger:hover {
+    background: rgba(244, 60, 60, .15);
+    border-color: #f44;
+    color: #ff7878;
+  }
+  .editor-bar .save-indicator {
+    align-self: center;
+    font: 700 9pt 'Roboto Mono', monospace;
+    color: #666;
+    letter-spacing: 0.1em;
+    padding: 0 4px;
+  }
+  .editor-bar .save-indicator.saved { color: #34d399; }
+  .editor-bar .save-indicator.saving { color: #06d4ff; }
+
+  /* 右鍵自訂尺寸彈窗 */
+  .resize-popup {
+    position: fixed;
+    background: rgba(13, 16, 22, .98);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(6,212,255,.5);
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6);
+    z-index: 200;
+    min-width: 220px;
+    display: none;
+  }
+  .resize-popup.open { display: block; }
+  .resize-popup .rsz-head {
+    font: 700 9pt 'Roboto Mono', monospace;
+    color: #06d4ff;
+    letter-spacing: 0.15em;
+    margin-bottom: 10px;
+  }
+  .resize-popup .rsz-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .resize-popup .rsz-row label {
+    flex: 0 0 50px;
+    font: 700 10pt 'Roboto Mono', monospace;
+    color: #aaa;
+  }
+  .resize-popup .rsz-row input {
+    flex: 1;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.15);
+    color: #fff;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font: 700 10pt 'Roboto Mono', monospace;
+    outline: none;
+    width: 70px;
+  }
+  .resize-popup .rsz-row input:focus {
+    border-color: #06d4ff;
+    background: rgba(6,212,255,.08);
+  }
+  .resize-popup .rsz-row .unit {
+    color: #666;
+    font: 700 9pt 'Roboto Mono', monospace;
+  }
+  .resize-popup .rsz-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .resize-popup .rsz-actions button {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2);
+    color: #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font: 700 9pt 'Roboto Mono', monospace;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+  }
+  .resize-popup .rsz-actions button.primary {
+    background: rgba(6,212,255,.18);
+    border-color: #06d4ff;
+    color: #06d4ff;
+  }
+  .resize-popup .rsz-actions button:hover {
+    background: rgba(6,212,255,.1);
+    border-color: #06d4ff;
+  }
+  .resize-popup .rsz-presets {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .resize-popup .rsz-presets button {
+    flex: 1;
+    background: transparent;
+    border: 1px dashed rgba(255,255,255,.2);
+    color: #888;
+    padding: 4px 0;
+    border-radius: 3px;
+    font: 700 8pt 'Roboto Mono', monospace;
+    cursor: pointer;
+  }
+  .resize-popup .rsz-presets button:hover {
+    border-color: #06d4ff;
+    color: #06d4ff;
+  }
+
+  /* ---------- 列印時:全部 UI 隱藏 ---------- */
+  @media print {
+    body {
+      background: #0a0c10;
+      padding-bottom: 0;
+    }
+    .page {
+      margin: 0;
+      box-shadow: none;
+    }
+    .page-tools,
+    .editor-bar,
+    .resize-popup { display: none !important; }
+    [contenteditable="true"]:hover,
+    [contenteditable="true"]:focus {
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== PAGE 01 · cell_grid ===================== -->
+<section class="page" data-page-id="p01">
+  <div class="page-tools">
+    <button class="btn-delete" title="刪除此頁">× 刪除</button>
+  </div>
+
+  <div class="brand">
+    <span class="left" contenteditable="true">CYBERCUBE / 閃動格子</span>
+    <span contenteditable="true">OPERATIONS BRIEFING — INTERACTIVE EFFECT</span>
+  </div>
+
+  <div class="header">
+    <div class="eyebrow" contenteditable="true">// CYBERCUBE × 宇方圓 · INTERACTIVE INSTALLATION</div>
+    <h1 class="title-zh" contenteditable="true">閃動格子</h1>
+    <p class="title-en" contenteditable="true">CELL GRID / DATA WALL</p>
+  </div>
+
+  <div class="capture" data-w="130" data-h="130">
+    <span class="placeholder">SCREEN CAPTURE<small>左鍵點擊上傳　·　右鍵自訂尺寸</small></span>
+  </div>
+
+  <div class="description">
+    <div class="desc-label">互動說明</div>
+    <ul class="desc-body" contenteditable="true">
+      <li>場域五面鋪滿 <strong>0.25 公尺見方的小格子</strong>,共數千格,色彩由青/藍/綠/黃/紅五色隨機分布。</li>
+      <li>每格獨立呼吸,並以 2-6 秒間隔在格內顯示<strong>變動的字符</strong>(c y b e r u 0 4 7,Matrix 風格字流)。</li>
+      <li>觀眾踩踏時,該格<strong>瞬間白熱亮起</strong>,鄰格漣漪向外擴張 3 秒,類似石頭丟入水面。</li>
+      <li>連續滑動時,沿途<strong>每個經過的格子都會依序亮起</strong>,形成軌跡。</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <span>SOP · INTERNAL USE ONLY</span>
+    <span class="page-num">01<span class="total">/05</span></span>
+  </div>
+</section>
+
+<!-- ===================== PAGE 02 · mirror_pool ===================== -->
+<section class="page" data-page-id="p02">
+  <div class="page-tools">
+    <button class="btn-delete" title="刪除此頁">× 刪除</button>
+  </div>
+
+  <div class="brand">
+    <span class="left" contenteditable="true">CYBERCUBE / 閃動格子</span>
+    <span contenteditable="true">OPERATIONS BRIEFING — INTERACTIVE EFFECT</span>
+  </div>
+
+  <div class="header">
+    <div class="eyebrow" contenteditable="true">// CYBERCUBE × 宇方圓 · INTERACTIVE INSTALLATION</div>
+    <h1 class="title-zh" contenteditable="true">深淵鏡</h1>
+    <p class="title-en" contenteditable="true">MIRROR POOL / ABYSS MIRROR</p>
+  </div>
+
+  <div class="capture" data-w="130" data-h="130">
+    <span class="placeholder">SCREEN CAPTURE<small>左鍵點擊上傳　·　右鍵自訂尺寸</small></span>
+  </div>
+
+  <div class="description">
+    <div class="desc-label">互動說明</div>
+    <ul class="desc-body" contenteditable="true">
+      <li>地板呈現深淵般的<strong>暗色水面</strong>,踩踏會激起<strong>同心圓漣漪</strong>,多人同時踩踏漣漪互相干涉。</li>
+      <li>抬頭看牆面上半部,可見<strong>滿天繁星</strong>(冷白/暖白混色,獨立閃爍)。</li>
+      <li>踩踏牆面時,踩點處綻放<strong>brand 五色擴張環</strong>(青/藍/綠/黃/紅,每次隨機),與地板水波形成色彩對比。</li>
+      <li>連續滑動會留下<strong>細波尾跡</strong>,模擬手指劃過水面。</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <span>SOP · INTERNAL USE ONLY</span>
+    <span class="page-num">02<span class="total">/05</span></span>
+  </div>
+</section>
+
+<!-- ===================== PAGE 03 · particle_field ===================== -->
+<section class="page" data-page-id="p03">
+  <div class="page-tools">
+    <button class="btn-delete" title="刪除此頁">× 刪除</button>
+  </div>
+
+  <div class="brand">
+    <span class="left" contenteditable="true">CYBERCUBE / 閃動格子</span>
+    <span contenteditable="true">OPERATIONS BRIEFING — INTERACTIVE EFFECT</span>
+  </div>
+
+  <div class="header">
+    <div class="eyebrow" contenteditable="true">// CYBERCUBE × 宇方圓 · INTERACTIVE INSTALLATION</div>
+    <h1 class="title-zh" contenteditable="true">流光粒子</h1>
+    <p class="title-en" contenteditable="true">PARTICLE FIELD / FLOATING LIGHTS</p>
+  </div>
+
+  <div class="capture" data-w="130" data-h="130">
+    <span class="placeholder">SCREEN CAPTURE<small>左鍵點擊上傳　·　右鍵自訂尺寸</small></span>
+  </div>
+
+  <div class="description">
+    <div class="desc-label">互動說明</div>
+    <ul class="desc-body" contenteditable="true">
+      <li>場域中漂浮 <strong>32 顆 brand 色粒子</strong>(青/藍/綠/黃/紅),沿弧形軌跡緩慢漂移,重疊處融光成光斑。</li>
+      <li>踩踏時,附近粒子被<strong>無形推力推開</strong>,離開原軌跡,1.2 秒後逐漸回流。</li>
+      <li>連續滑動會留下<strong>亮青色光跡尾巴</strong>,如同手指撥動星河。</li>
+      <li>無互動時保持低密度漂浮,呈現安靜的「立體星河」氛圍。</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <span>SOP · INTERNAL USE ONLY</span>
+    <span class="page-num">03<span class="total">/05</span></span>
+  </div>
+</section>
+
+<!-- ===================== PAGE 04 · sonar_sweep ===================== -->
+<section class="page" data-page-id="p04">
+  <div class="page-tools">
+    <button class="btn-delete" title="刪除此頁">× 刪除</button>
+  </div>
+
+  <div class="brand">
+    <span class="left" contenteditable="true">CYBERCUBE / 閃動格子</span>
+    <span contenteditable="true">OPERATIONS BRIEFING — INTERACTIVE EFFECT</span>
+  </div>
+
+  <div class="header">
+    <div class="eyebrow" contenteditable="true">// CYBERCUBE × 宇方圓 · INTERACTIVE INSTALLATION</div>
+    <h1 class="title-zh" contenteditable="true">雷達掃描</h1>
+    <p class="title-en" contenteditable="true">SONAR SWEEP / RADAR ROOM</p>
+  </div>
+
+  <div class="capture" data-w="130" data-h="130">
+    <span class="placeholder">SCREEN CAPTURE<small>左鍵點擊上傳　·　右鍵自訂尺寸</small></span>
+  </div>
+
+  <div class="description">
+    <div class="desc-label">互動說明</div>
+    <ul class="desc-body" contenteditable="true">
+      <li>場域呈現<strong>雷達盤背景</strong>:細網格線(經緯)、中央十字準星、整體深藍墨色。</li>
+      <li>每 4 秒從中央放射出<strong>掃描環</strong>,環狀往外擴張覆蓋全場域。</li>
+      <li>踩踏時,踩點變成<strong>獨立 ping 源</strong>,自己擴出 brand 色環,多人同時踩踏會看到多色干涉。</li>
+      <li>連續滑動會留下<strong>翡綠雷達拖痕</strong>,類似游標掃過螢光屏。</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <span>SOP · INTERNAL USE ONLY</span>
+    <span class="page-num">04<span class="total">/05</span></span>
+  </div>
+</section>
+
+<!-- ===================== PAGE 05 · neural_synapse ===================== -->
+<section class="page" data-page-id="p05">
+  <div class="page-tools">
+    <button class="btn-delete" title="刪除此頁">× 刪除</button>
+  </div>
+
+  <div class="brand">
+    <span class="left" contenteditable="true">CYBERCUBE / 閃動格子</span>
+    <span contenteditable="true">OPERATIONS BRIEFING — INTERACTIVE EFFECT</span>
+  </div>
+
+  <div class="header">
+    <div class="eyebrow" contenteditable="true">// CYBERCUBE × 宇方圓 · INTERACTIVE INSTALLATION</div>
+    <h1 class="title-zh" contenteditable="true">神經突觸</h1>
+    <p class="title-en" contenteditable="true">NEURAL SYNAPSE / GHOST IN THE SHELL</p>
+  </div>
+
+  <div class="capture" data-w="130" data-h="130">
+    <span class="placeholder">SCREEN CAPTURE<small>左鍵點擊上傳　·　右鍵自訂尺寸</small></span>
+  </div>
+
+  <div class="description">
+    <div class="desc-label">互動說明</div>
+    <ul class="desc-body" contenteditable="true">
+      <li>場域呈現<strong>立體神經絲網絡</strong>,青藍/紫/暖色三色絲,加上突觸節點呼吸式發光。</li>
+      <li>明暗脈衝沿絲傳遞,搭配低頻整體呼吸,像進入腦內視覺空間。</li>
+      <li>踩踏時,踩點綻放<strong>桃紅薄漣漪</strong>(僅此時段出現桃紅色),0.5 秒內完全消失。</li>
+      <li>連續滑動會留下<strong>連續桃紅薄環</strong>,但其餘畫面顏色不變。</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <span>SOP · INTERNAL USE ONLY</span>
+    <span class="page-num">05<span class="total">/05</span></span>
+  </div>
+</section>
+
+<!-- ===================== 底部編輯工具列 ===================== -->
+<div class="editor-bar" id="editorBar">
+  <button class="primary" id="btnAddPage">+ 新增頁面</button>
+  <button id="btnPrint">列印 / 存 PDF</button>
+  <button class="danger" id="btnReset">重置全部</button>
+  <span class="save-indicator" id="saveIndicator">●</span>
+</div>
+
+<!-- ===================== 右鍵調整尺寸彈窗 ===================== -->
+<div class="resize-popup" id="resizePopup">
+  <div class="rsz-head">// 自訂截圖框尺寸</div>
+  <div class="rsz-row">
+    <label>寬度</label>
+    <input type="number" id="rszW" min="40" max="190" step="5" value="130" />
+    <span class="unit">mm</span>
+  </div>
+  <div class="rsz-row">
+    <label>高度</label>
+    <input type="number" id="rszH" min="40" max="240" step="5" value="130" />
+    <span class="unit">mm</span>
+  </div>
+  <div class="rsz-presets">
+    <button data-preset="100,100">1:1 100</button>
+    <button data-preset="130,130">1:1 130</button>
+    <button data-preset="170,170">1:1 170</button>
+    <button data-preset="190,107">16:9 寬</button>
+  </div>
+  <div class="rsz-actions">
+    <button class="primary" id="rszApply">套用</button>
+    <button id="rszCancel">取消</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'cybercube_sop_briefing_v2';
+  const editorBar   = document.getElementById('editorBar');
+  const resizePopup = document.getElementById('resizePopup');
+  const saveInd     = document.getElementById('saveIndicator');
+  let activeCapture = null;       // currently right-clicked capture
+  let saveTimer     = null;
+
+  // ========== Storage ==========
+  function saveDoc() {
+    try {
+      const pages = Array.from(document.querySelectorAll('.page')).map(p => p.outerHTML);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ pages, ts: Date.now() }));
+      saveInd.textContent = '● SAVED';
+      saveInd.className = 'save-indicator saved';
+      setTimeout(() => { saveInd.className = 'save-indicator'; saveInd.textContent = '●'; }, 1400);
+    } catch (e) {
+      console.warn('save failed:', e);
+      saveInd.textContent = '⚠ ERROR';
+    }
+  }
+
+  function loadDoc() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const { pages } = JSON.parse(raw);
+      if (!Array.isArray(pages) || !pages.length) return false;
+      document.querySelectorAll('.page').forEach(p => p.remove());
+      const anchor = editorBar;
+      pages.forEach(html => {
+        const tmp = document.createElement('template');
+        tmp.innerHTML = html.trim();
+        const page = tmp.content.firstElementChild;
+        if (page) document.body.insertBefore(page, anchor);
+      });
+      return true;
+    } catch (e) {
+      console.warn('load failed:', e);
+      return false;
+    }
+  }
+
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveInd.textContent = '● SAVING…';
+    saveInd.className = 'save-indicator saving';
+    saveTimer = setTimeout(saveDoc, 600);
+  }
+
+  // ========== Page tools ==========
+  function renumberPages() {
+    const pages = document.querySelectorAll('.page');
+    const total = String(pages.length).padStart(2, '0');
+    pages.forEach((p, i) => {
+      const num = p.querySelector('.page-num');
+      if (!num) return;
+      const numTxt = String(i + 1).padStart(2, '0');
+      const totalEl = num.querySelector('.total');
+      // 重寫:第一個 textNode 是「數字」,後面 .total 是「/n」
+      while (num.firstChild && num.firstChild.nodeType === 3) {
+        num.removeChild(num.firstChild);
+      }
+      num.insertBefore(document.createTextNode(numTxt), num.firstChild);
+      if (totalEl) totalEl.textContent = '/' + total;
+    });
+  }
+
+  function addPage() {
+    const last = document.querySelector('.page:last-of-type');
+    if (!last) return;
+    const newPage = last.cloneNode(true);
+    newPage.dataset.pageId = 'p' + Date.now();
+    // 清空欄位填入 placeholder
+    const titleZh = newPage.querySelector('.title-zh');
+    const titleEn = newPage.querySelector('.title-en');
+    const descUl  = newPage.querySelector('.desc-body');
+    const img     = newPage.querySelector('.capture img');
+    if (titleZh) titleZh.textContent = '新特效標題';
+    if (titleEn) titleEn.textContent = 'NEW EFFECT TITLE';
+    if (descUl)  descUl.innerHTML = '<li>點此編輯互動說明 <strong>重點字</strong>…</li><li>第二條說明…</li>';
+    if (img) img.remove();
+    const cap = newPage.querySelector('.capture');
+    if (cap && !cap.querySelector('.placeholder')) {
+      const ph = document.createElement('span');
+      ph.className = 'placeholder';
+      ph.innerHTML = 'SCREEN CAPTURE<small>左鍵點擊上傳　·　右鍵自訂尺寸</small>';
+      cap.appendChild(ph);
+    }
+    document.body.insertBefore(newPage, editorBar);
+    renumberPages();
+    scheduleSave();
+    newPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function deletePage(pageEl) {
+    const pages = document.querySelectorAll('.page');
+    if (pages.length <= 1) {
+      alert('至少保留一頁');
+      return;
+    }
+    if (!confirm('確定刪除此頁?')) return;
+    pageEl.remove();
+    renumberPages();
+    scheduleSave();
+  }
+
+  // ========== Image upload ==========
+  function openFilePicker(captureEl) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        // 移除 placeholder
+        const ph = captureEl.querySelector('.placeholder');
+        if (ph) ph.remove();
+        // 找/建 img
+        let img = captureEl.querySelector('img');
+        if (!img) {
+          img = document.createElement('img');
+          captureEl.appendChild(img);
+        }
+        img.src = e.target.result;
+        scheduleSave();
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  // ========== Resize popup ==========
+  function openResizePopup(captureEl, x, y) {
+    activeCapture = captureEl;
+    const w = parseFloat(captureEl.dataset.w) || 130;
+    const h = parseFloat(captureEl.dataset.h) || 130;
+    document.getElementById('rszW').value = w;
+    document.getElementById('rszH').value = h;
+    // 定位(避免超出視窗)
+    const pad = 12;
+    const maxX = window.innerWidth  - resizePopup.offsetWidth  - pad;
+    const maxY = window.innerHeight - resizePopup.offsetHeight - pad;
+    resizePopup.style.left = Math.min(x, maxX) + 'px';
+    resizePopup.style.top  = Math.min(y, maxY) + 'px';
+    resizePopup.classList.add('open');
+  }
+
+  function closeResizePopup() {
+    resizePopup.classList.remove('open');
+    activeCapture = null;
+  }
+
+  function applyResize() {
+    if (!activeCapture) return closeResizePopup();
+    const w = parseFloat(document.getElementById('rszW').value) || 130;
+    const h = parseFloat(document.getElementById('rszH').value) || 130;
+    activeCapture.dataset.w = w;
+    activeCapture.dataset.h = h;
+    activeCapture.style.width  = w + 'mm';
+    activeCapture.style.height = h + 'mm';
+    closeResizePopup();
+    scheduleSave();
+  }
+
+  // Restore capture sizes from data-w/data-h
+  function applyStoredSizes() {
+    document.querySelectorAll('.capture').forEach(cap => {
+      const w = parseFloat(cap.dataset.w);
+      const h = parseFloat(cap.dataset.h);
+      if (w) cap.style.width  = w + 'mm';
+      if (h) cap.style.height = h + 'mm';
+    });
+  }
+
+  // ========== Event delegation ==========
+  document.body.addEventListener('click', e => {
+    // 刪除頁
+    if (e.target.matches('.btn-delete')) {
+      e.stopPropagation();
+      const page = e.target.closest('.page');
+      if (page) deletePage(page);
+      return;
+    }
+    // 點 capture(非 img 子層、左鍵)→ 上傳
+    const cap = e.target.closest('.capture');
+    if (cap && e.button === 0) {
+      // 但不要在 contenteditable focus 內觸發
+      if (e.target.isContentEditable) return;
+      openFilePicker(cap);
+      return;
+    }
+    // 點空白處 → 關 resize popup
+    if (!e.target.closest('.resize-popup')) {
+      closeResizePopup();
+    }
+  });
+
+  document.body.addEventListener('contextmenu', e => {
+    const cap = e.target.closest('.capture');
+    if (cap) {
+      e.preventDefault();
+      openResizePopup(cap, e.clientX, e.clientY);
+    }
+  });
+
+  // ContentEditable 輸入自動存
+  document.body.addEventListener('input', e => {
+    if (e.target.isContentEditable) scheduleSave();
+  });
+
+  // 編輯工具列
+  document.getElementById('btnAddPage').addEventListener('click', addPage);
+  document.getElementById('btnPrint').addEventListener('click', () => window.print());
+  document.getElementById('btnReset').addEventListener('click', () => {
+    if (!confirm('重置會清掉所有編輯與圖片,確定?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  });
+
+  // Resize popup 按鈕
+  document.getElementById('rszApply').addEventListener('click', applyResize);
+  document.getElementById('rszCancel').addEventListener('click', closeResizePopup);
+  resizePopup.querySelectorAll('.rsz-presets button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [w, h] = btn.dataset.preset.split(',').map(Number);
+      document.getElementById('rszW').value = w;
+      document.getElementById('rszH').value = h;
+    });
+  });
+
+  // ESC 關 popup
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeResizePopup();
+  });
+
+  // 啟動:嘗試載入儲存的版本,否則用預設 5 頁
+  if (loadDoc()) {
+    renumberPages();
+    applyStoredSizes();
+  } else {
+    renumberPages();
+  }
+})();
+</script>
+
+</body>
+</html>
